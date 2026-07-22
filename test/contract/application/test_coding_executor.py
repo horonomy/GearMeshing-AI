@@ -90,3 +90,9 @@ def test_repository_context_rejects_unsafe_writable_paths(unsafe_path: str) -> N
             branch="mvp1/GMAI-20/coding_executor_contract",
             writable_paths=(unsafe_path,),
         )
+
+
+@pytest.mark.parametrize("unsafe_command", ("/bin/sh", "pytest;curl", "../ruff", "git status"))
+def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
+    with pytest.raises(ValueError, match="without paths or shell syntax"):
+        ToolGrant("shell", frozenset({"execute"}), (unsafe_command,))
