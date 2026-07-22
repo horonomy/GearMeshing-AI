@@ -141,12 +141,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         self._sleep = sleep
         self._owns_client = client is None
         try:
-            self._client = client or httpx.AsyncClient(
-                base_url=configuration.site_url,
-                auth=httpx.BasicAuth(configuration.email, configuration.api_token),
-                headers={"Accept": "application/json"},
-                timeout=configuration.timeout_seconds,
-            )
+            self._client = client or httpx.AsyncClient()
         except (httpx.InvalidURL, ValueError) as error:
             raise JiraConfigurationError("Jira client URL configuration is invalid") from error
 
@@ -208,9 +203,18 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         params: Mapping[str, str | int] | None = None,
         body: Mapping[str, JsonValue] | None = None,
     ) -> object:
+        url = f"{self._configuration.site_url}{path}"
         for attempt in range(self._configuration.max_rate_limit_retries + 1):
             try:
-                async with self._client.stream(method, path, params=params, json=body) as response:
+                async with self._client.stream(
+                    method,
+                    url,
+                    params=params,
+                    json=body,
+                    auth=httpx.BasicAuth(self._configuration.email, self._configuration.api_token),
+                    headers={"Accept": "application/json"},
+                    timeout=self._configuration.timeout_seconds,
+                ) as response:
                     if response.status_code == 429:
                         if attempt == self._configuration.max_rate_limit_retries:
                             raise JiraRateLimitError("Jira rate limit persisted after bounded retries")
