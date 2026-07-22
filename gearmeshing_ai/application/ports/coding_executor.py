@@ -83,6 +83,7 @@ class TerminalOutcome(StrEnum):
     """Finite terminal states reported by every execution."""
 
     SUCCEEDED = "succeeded"
+    BLOCKED = "blocked"
     FAILED = "failed"
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
