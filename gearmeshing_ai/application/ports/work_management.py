@@ -258,9 +258,7 @@ class CompletionUpdate:
         object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
         object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
         object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
-        evidence_urls = tuple(
-            _https_url_without_credentials(url, "evidence_url") for url in self.evidence_urls
-        )
+        evidence_urls = tuple(_https_url_without_credentials(url, "evidence_url") for url in self.evidence_urls)
         if not evidence_urls:
             raise ValueError("evidence_urls must contain at least one URL")
         if len(set(evidence_urls)) != len(evidence_urls):
