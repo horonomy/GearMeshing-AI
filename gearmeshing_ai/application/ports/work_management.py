@@ -224,6 +224,25 @@ class ProgressUpdate:
             raise TypeError("metadata must be Metadata")
 
 
+@dataclass(frozen=True, slots=True)
+class BlockerUpdate:
+    """Idempotent request to report an actionable execution blocker."""
+
+    work_item_key: str
+    idempotency_key: str
+    summary: str
+    details: str
+    metadata: Metadata = Metadata()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
+        object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
+        object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
+        object.__setattr__(self, "details", _required_text(self.details, "details"))
+        if not isinstance(self.metadata, Metadata):
+            raise TypeError("metadata must be Metadata")
+
+
 class WorkManagementProvider(ABC):
     """Boundary implemented by external work-management adapters."""
 
