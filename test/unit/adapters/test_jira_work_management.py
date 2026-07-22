@@ -150,6 +150,23 @@ async def test_incomplete_issue_returns_actionable_blocking_diagnostics() -> Non
     }
 
 
+async def test_missing_description_remains_empty_and_blocks_readiness() -> None:
+    payload = issue_payload()
+    fields = payload["fields"]
+    assert isinstance(fields, dict)
+    fields["description"] = None
+    adapter = provider(lambda _: httpx.Response(200, json=payload))
+
+    item = await adapter.get_work_item("GMAI-17")
+    readiness = await adapter.evaluate_readiness(item)
+
+    assert item.description == ""
+    assert {problem.code for problem in readiness.problems} == {
+        "missing-description",
+        "missing-acceptance-criteria",
+    }
+
+
 async def test_unsupported_issue_type_is_blocked() -> None:
     adapter = provider(lambda _: httpx.Response(200, json=issue_payload(issue_type="Epic")))
 
