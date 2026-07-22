@@ -1,11 +1,15 @@
 """Tests for deterministic governed workflow orchestration."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from gearmeshing_ai.application.workflow_runner import (
     StageRequest,
     VerificationResult,
     WorkflowCheckpointStore,
+    WorkflowIntegrityError,
     WorkflowRunner,
 )
 from gearmeshing_ai.domain.work_run import WorkRun, WorkRunArtifact, WorkRunCorrelation
@@ -131,3 +135,19 @@ def _runner(
         remediation,
         publication,
     )
+
+
+def test_checkpoint_must_belong_to_the_requested_run() -> None:
+    approved = _approved()
+
+    class MisroutedCheckpoints:
+        def load(self, run_id: str) -> WorkRun | None:
+            return replace(approved, run_id="different-run")
+
+        def save(self, *, expected: WorkRun | None, updated: WorkRun) -> None:
+            raise AssertionError("a mismatched checkpoint must not be saved")
+
+    runner, *_ = _runner(MisroutedCheckpoints())
+
+    with pytest.raises(WorkflowIntegrityError, match="does not extend"):
+        runner.run(approved)
