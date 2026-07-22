@@ -14,7 +14,11 @@ from gearmeshing_ai.adapters.jira_errors import (
     JiraResponseError,
 )
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
-from gearmeshing_ai.application.ports.work_management import RepositoryReference
+from gearmeshing_ai.application.ports.work_management import (
+    ProgressUpdate,
+    RepositoryReference,
+    UnsupportedCapabilityError,
+)
 
 type Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -246,3 +250,15 @@ async def test_invalid_request_url_is_mapped_to_a_safe_configuration_error() -> 
         await provider(handler).get_work_item("GMAI-17")
 
     assert "not-a-real-token" not in str(caught.value)
+
+
+async def test_disabled_writes_fail_as_explicit_unsupported_capabilities() -> None:
+    update = ProgressUpdate(
+        work_item_key="GMAI-17",
+        idempotency_key="run-1:progress:50",
+        summary="Implementing adapter",
+        percent_complete=50,
+    )
+
+    with pytest.raises(UnsupportedCapabilityError, match="update_progress"):
+        await provider(lambda _: httpx.Response(500)).update_progress(update)
