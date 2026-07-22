@@ -167,3 +167,14 @@ def test_work_item_defensively_freezes_labels() -> None:
 
     assert item.key == "GMAI-16"
     assert item.labels == ("mvp-1",)
+
+
+def test_readiness_is_derived_from_immutable_problems() -> None:
+    problems = [ReadinessProblem(code="missing-approval", summary="Approval missing", details="Await owner approval")]
+    blocked = ReadinessResult(work_item_key="GMAI-16", problems=problems)  # type: ignore[arg-type]
+
+    problems.clear()
+
+    assert blocked.ready is False
+    assert blocked.problems[0].code == "missing-approval"
+    assert ReadinessResult(work_item_key="GMAI-16").ready is True
