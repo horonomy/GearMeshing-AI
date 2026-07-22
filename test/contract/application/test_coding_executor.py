@@ -453,6 +453,30 @@ def test_execution_result_rejects_incoherent_failure_categories(
         )
 
 
+@pytest.mark.parametrize(
+    "category",
+    (
+        FailureCategory.INVALID_REQUEST,
+        FailureCategory.PROVIDER,
+        FailureCategory.TOOL,
+        FailureCategory.VERIFICATION,
+        FailureCategory.INTERNAL,
+    ),
+)
+def test_failed_result_accepts_explicit_failure_categories(category: FailureCategory) -> None:
+    request = make_request()
+    result = ExecutionResult(
+        execution_id=request.execution_id,
+        outcome=TerminalOutcome.FAILED,
+        limits=request.limits,
+        events_emitted=2,
+        failure=FailureMetadata(category, "expected_failure", "Expected failure"),
+    )
+
+    assert result.failure is not None
+    assert result.failure.category is category
+
+
 async def test_executor_rejects_grants_outside_its_capabilities() -> None:
     executor = FakeCodingExecutor(
         capabilities=ExecutorCapabilities(streaming=True, cancellation=True, tool_names=frozenset())
