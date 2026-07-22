@@ -269,3 +269,21 @@ class ExecutionEvent:
         object.__setattr__(self, "sequence", _positive_int(self.sequence, "sequence"))
         object.__setattr__(self, "message", _required_text(self.message, "message", maximum=2048))
         object.__setattr__(self, "metadata", _frozen_metadata(self.metadata))
+
+
+@dataclass(frozen=True, slots=True)
+class FailureMetadata:
+    """Sanitized machine-readable explanation for a non-success outcome."""
+
+    category: FailureCategory
+    code: str
+    message: str
+    retryable: bool = False
+    details: FrozenMetadata = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.retryable, bool):
+            raise ValueError("retryable must be a boolean")
+        object.__setattr__(self, "code", _identifier(self.code, "failure code"))
+        object.__setattr__(self, "message", _required_text(self.message, "failure message", maximum=2048))
+        object.__setattr__(self, "details", _frozen_metadata(self.details))
