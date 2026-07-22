@@ -286,6 +286,30 @@ async def test_executor_reports_resource_exhaustion_without_exceeding_event_limi
     assert result.failure.category is FailureCategory.RESOURCE
 
 
+@pytest.mark.parametrize(
+    ("max_artifacts", "max_artifact_bytes"),
+    ((1, 1024), (2, 9)),
+)
+async def test_executor_preflights_artifact_limits_before_emission(
+    max_artifacts: int,
+    max_artifact_bytes: int,
+) -> None:
+    artifacts = (
+        ExecutionArtifact("reports/first.json", "application/json", ARTIFACT_DIGEST, 5),
+        ExecutionArtifact("reports/second.json", "application/json", ARTIFACT_DIGEST, 5),
+    )
+    executor = FakeCodingExecutor(capabilities=make_capabilities(), artifacts=artifacts)
+    request = make_request(max_artifacts=max_artifacts, max_artifact_bytes=max_artifact_bytes)
+
+    session = await executor.start(request)
+    events = [event async for event in session.events()]
+    result = await session.result()
+
+    assert [event.kind for event in events] == [EventKind.STARTED, EventKind.TERMINAL]
+    assert result.outcome is TerminalOutcome.RESOURCE_EXHAUSTED
+    assert result.artifacts == ()
+
+
 async def test_executor_cancellation_is_idempotent_and_terminal() -> None:
     executor = FakeCodingExecutor(capabilities=make_capabilities(), progress_messages=("Unused work",))
     session = await executor.start(make_request())
