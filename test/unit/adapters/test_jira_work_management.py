@@ -22,6 +22,7 @@ from gearmeshing_ai.adapters.jira_errors import (
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import (
     BlockerUpdate,
+    CompletionUpdate,
     ProgressUpdate,
     ReadinessProblem,
     ReadinessResult,
@@ -649,6 +650,31 @@ async def test_blocker_comment_boundary_is_validated_before_network_access() -> 
         )
     assert requests == 2
 
+
+async def test_completion_evidence_aggregate_is_bounded_before_network_access() -> None:
+    requests = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(500)
+
+    evidence_urls = tuple(
+        f"https://github.com/horonomy/GearMeshing-AI/actions/runs/{index:04d}/artifacts/verification-evidence"
+        for index in range(150)
+    )
+
+    with pytest.raises(JiraWriteValidationError, match="ADF text boundary"):
+        await provider(handler, allow_writes=True).complete_work(
+            CompletionUpdate(
+                work_item_key="GMAI-17",
+                idempotency_key="run-1:completion:oversized",
+                summary="Verified",
+                evidence_urls=evidence_urls,
+            )
+        )
+
+    assert requests == 0
 
 async def test_blocked_readiness_result_can_be_posted_to_jira() -> None:
     posted: dict[str, object] = {}
