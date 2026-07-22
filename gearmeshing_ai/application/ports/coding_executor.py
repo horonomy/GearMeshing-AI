@@ -270,8 +270,11 @@ class ExecutionEvent:
     kind: EventKind
     message: str
     metadata: FrozenMetadata = field(default_factory=dict)
+    artifact: ExecutionArtifact | None = None
 
     def __post_init__(self) -> None:
+        if (self.kind is EventKind.ARTIFACT) is (self.artifact is None):
+            raise ValueError("artifact events require exactly one typed artifact payload")
         object.__setattr__(self, "sequence", _positive_int(self.sequence, "sequence"))
         object.__setattr__(self, "message", _required_text(self.message, "message", maximum=2048))
         object.__setattr__(self, "metadata", _frozen_metadata(self.metadata))
