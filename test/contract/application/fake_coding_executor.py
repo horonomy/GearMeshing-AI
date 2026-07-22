@@ -60,10 +60,32 @@ class FakeExecutionSession:
         return self._stream_events()
 
     async def _stream_events(self) -> AsyncIterator[ExecutionEvent]:
-        events = self._build_events()
-        for event in events:
-            yield event
-        self._result = self._build_result(len(events))
+        sequence = 1
+        yield ExecutionEvent(sequence, EventKind.STARTED, "Execution started")
+        if self._cancel_reason is None:
+            for message in self._progress_messages:
+                if self._cancel_reason is not None:
+                    break
+                sequence += 1
+                yield ExecutionEvent(sequence, EventKind.PROGRESS, message)
+            for artifact in self._artifacts:
+                if self._cancel_reason is not None:
+                    break
+                sequence += 1
+                yield ExecutionEvent(
+                    sequence,
+                    EventKind.ARTIFACT,
+                    f"Produced artifact {artifact.relative_path}",
+                    artifact=artifact,
+                )
+        sequence += 1
+        self._result = self._build_result(sequence)
+        yield ExecutionEvent(
+            sequence,
+            EventKind.TERMINAL,
+            "Execution reached a terminal outcome",
+            {"outcome": self._result.outcome.value},
+        )
 
     async def result(self) -> ExecutionResult:
         if self._result is None:
@@ -82,33 +104,6 @@ class FakeExecutionSession:
             return
         if self._cancel_reason is None:
             self._cancel_reason = normalized
-
-    def _build_events(self) -> tuple[ExecutionEvent, ...]:
-        events = [ExecutionEvent(1, EventKind.STARTED, "Execution started")]
-        if self._cancel_reason is None:
-            events.extend(
-                ExecutionEvent(index, EventKind.PROGRESS, message)
-                for index, message in enumerate(self._progress_messages, start=2)
-            )
-            events.extend(
-                ExecutionEvent(
-                    len(events) + 1,
-                    EventKind.ARTIFACT,
-                    f"Produced artifact {artifact.relative_path}",
-                    artifact=artifact,
-                )
-                for artifact in self._artifacts
-            )
-        terminal_outcome = TerminalOutcome.CANCELLED if self._cancel_reason is not None else self._outcome
-        events.append(
-            ExecutionEvent(
-                len(events) + 1,
-                EventKind.TERMINAL,
-                "Execution reached a terminal outcome",
-                {"outcome": terminal_outcome.value},
-            )
-        )
-        return tuple(events)
 
     def _build_result(self, events_emitted: int) -> ExecutionResult:
         failure: FailureMetadata | None
