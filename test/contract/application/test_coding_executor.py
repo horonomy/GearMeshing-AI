@@ -430,6 +430,10 @@ def test_execution_result_requires_failure_for_non_success_outcome() -> None:
         (TerminalOutcome.CANCELLED, FailureCategory.TIMEOUT),
         (TerminalOutcome.TIMED_OUT, FailureCategory.CANCELLED),
         (TerminalOutcome.RESOURCE_EXHAUSTED, FailureCategory.INTERNAL),
+        (TerminalOutcome.BLOCKED, FailureCategory.TOOL),
+        (TerminalOutcome.FAILED, FailureCategory.CANCELLED),
+        (TerminalOutcome.FAILED, FailureCategory.TIMEOUT),
+        (TerminalOutcome.FAILED, FailureCategory.RESOURCE),
     ),
 )
 def test_execution_result_rejects_incoherent_failure_categories(
