@@ -269,6 +269,27 @@ class CompletionUpdate:
             raise TypeError("metadata must be Metadata")
 
 
+@dataclass(frozen=True, slots=True)
+class ArtifactUpdate:
+    """Idempotent request to attach a reviewable artifact to a work item."""
+
+    work_item_key: str
+    idempotency_key: str
+    name: str
+    kind: str
+    web_url: str
+    metadata: Metadata = Metadata()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
+        object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
+        object.__setattr__(self, "name", _required_text(self.name, "name"))
+        object.__setattr__(self, "kind", _required_text(self.kind, "kind"))
+        object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
+        if not isinstance(self.metadata, Metadata):
+            raise TypeError("metadata must be Metadata")
+
+
 class WorkManagementProvider(ABC):
     """Boundary implemented by external work-management adapters."""
 
