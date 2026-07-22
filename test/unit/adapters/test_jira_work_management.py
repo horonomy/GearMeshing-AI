@@ -17,6 +17,7 @@ from gearmeshing_ai.adapters.jira_errors import (
     JiraIdempotencyConflictError,
     JiraRateLimitError,
     JiraResponseError,
+    JiraWriteValidationError,
 )
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import (
@@ -610,6 +611,43 @@ async def test_new_comment_rejects_timezone_naive_timestamp() -> None:
                 percent_complete=75,
             )
         )
+
+
+async def test_blocker_comment_boundary_is_validated_before_network_access() -> None:
+    requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        if request.method == "GET":
+            return httpx.Response(200, json={"comments": [], "total": 0})
+        return httpx.Response(201, json={"id": "10004", "created": "2026-07-22T05:03:00Z"})
+
+    adapter = provider(handler, allow_writes=True)
+    prefix = "GearMeshing-AI blocker: S\n\n"
+    maximum_details = "d" * (10_000 - len(prefix))
+
+    receipt = await adapter.report_blocker(
+        BlockerUpdate(
+            work_item_key="GMAI-17",
+            idempotency_key="run-1:blocker:boundary",
+            summary="S",
+            details=maximum_details,
+        )
+    )
+    assert receipt.provider_reference == "10004"
+    assert requests == 2
+
+    with pytest.raises(JiraWriteValidationError, match="ADF text boundary"):
+        await adapter.report_blocker(
+            BlockerUpdate(
+                work_item_key="GMAI-17",
+                idempotency_key="run-1:blocker:oversized",
+                summary="S",
+                details=f"{maximum_details}d",
+            )
+        )
+    assert requests == 2
 
 
 async def test_blocked_readiness_result_can_be_posted_to_jira() -> None:
