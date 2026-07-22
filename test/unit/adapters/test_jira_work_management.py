@@ -10,6 +10,7 @@ from gearmeshing_ai.adapters.jira_errors import (
     JiraAuthenticationError,
     JiraAuthorizationError,
     JiraConfigurationError,
+    JiraRateLimitError,
 )
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import RepositoryReference
@@ -198,3 +199,29 @@ async def test_rate_limits_use_bounded_exponential_backoff() -> None:
     assert (await adapter.get_work_item("GMAI-17")).key == "GMAI-17"
     assert attempts == 3
     assert delays == [0.5, 1.0]
+
+
+async def test_rate_limit_retry_budget_is_enforced() -> None:
+    attempts = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(429)
+
+    async def no_wait(_: float) -> None:
+        return None
+
+    client = httpx.AsyncClient(
+        base_url="https://lightning-dust-mite.atlassian.net",
+        transport=httpx.MockTransport(handler),
+    )
+    adapter = JiraWorkManagementProvider(
+        configuration(max_rate_limit_retries=2),
+        client=client,
+        sleep=no_wait,
+    )
+
+    with pytest.raises(JiraRateLimitError, match="bounded retries"):
+        await adapter.get_work_item("GMAI-17")
+    assert attempts == 3
