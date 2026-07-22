@@ -262,3 +262,37 @@ async def test_disabled_writes_fail_as_explicit_unsupported_capabilities() -> No
 
     with pytest.raises(UnsupportedCapabilityError, match="update_progress"):
         await provider(lambda _: httpx.Response(500)).update_progress(update)
+
+
+async def test_repeated_write_reuses_comment_with_matching_idempotency_property() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request.method)
+        return httpx.Response(
+            200,
+            json={
+                "comments": [
+                    {
+                        "id": "10001",
+                        "created": "2026-07-22T05:00:00Z",
+                        "properties": [
+                            {"key": "gearmeshing-ai.idempotency-key", "value": "run-1:progress:50"}
+                        ],
+                    }
+                ],
+                "total": 1,
+            },
+        )
+
+    receipt = await provider(handler, allow_writes=True).update_progress(
+        ProgressUpdate(
+            work_item_key="GMAI-17",
+            idempotency_key="run-1:progress:50",
+            summary="Implementing adapter",
+            percent_complete=50,
+        )
+    )
+
+    assert receipt.provider_reference == "10001"
+    assert requests == ["GET"]
