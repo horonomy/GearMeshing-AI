@@ -376,9 +376,14 @@ class WorkManagementProvider(ABC):
     async def _evaluate_readiness(self, work_item: WorkItem) -> ReadinessResult:
         """Evaluate readiness after the base capability guard succeeds."""
 
-    @abstractmethod
     async def update_progress(self, update: ProgressUpdate) -> OperationReceipt:
         """Publish execution progress."""
+        self.require_capability(WorkManagementCapability.UPDATE_PROGRESS)
+        return await self._update_progress(update)
+
+    @abstractmethod
+    async def _update_progress(self, update: ProgressUpdate) -> OperationReceipt:
+        """Publish progress after the base capability guard succeeds."""
 
     @abstractmethod
     async def report_blocker(self, update: BlockerUpdate) -> OperationReceipt:
