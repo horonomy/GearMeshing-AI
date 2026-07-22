@@ -241,6 +241,20 @@ def test_work_item_normalizes_and_freezes_acceptance_criteria() -> None:
     assert item.acceptance_criteria == ("Contract tests pass.",)
 
 
+def test_work_item_preserves_an_explicitly_missing_description() -> None:
+    item = WorkItem(
+        key="GMAI-16",
+        title="Contract",
+        description=" ",
+        acceptance_criteria=(),
+        status="In Progress",
+        web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
+        repository=repository(),
+    )
+
+    assert item.description == ""
+
+
 def test_readiness_is_derived_from_immutable_problems() -> None:
     problems = [ReadinessProblem(code="missing-approval", summary="Approval missing", details="Await owner approval")]
     blocked = ReadinessResult(work_item_key="GMAI-16", problems=problems)  # type: ignore[arg-type]
