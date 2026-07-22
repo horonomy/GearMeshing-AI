@@ -230,6 +230,17 @@ async def test_missing_configured_and_issue_repository_context_blocks_readiness(
     assert [problem.code for problem in readiness.problems] == ["missing-repository-context"]
 
 
+async def test_configured_repository_is_a_ready_fallback_without_issue_property() -> None:
+    adapter = provider(lambda _: httpx.Response(200, json=issue_payload(include_repository=False)))
+
+    item = await adapter.get_work_item("GMAI-17")
+    readiness = await adapter.evaluate_readiness(item)
+
+    assert item.repository == repository()
+    assert item.metadata.values["repository_context_present"] is True
+    assert readiness.ready is True
+
+
 async def test_unsupported_issue_type_is_blocked() -> None:
     adapter = provider(lambda _: httpx.Response(200, json=issue_payload(issue_type="Epic")))
 
