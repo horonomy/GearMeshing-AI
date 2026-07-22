@@ -89,3 +89,12 @@ def test_capabilities_raise_an_explicit_error_for_unsupported_operations() -> No
 
     assert caught.value.provider == "jira"
     assert caught.value.capability is WorkManagementCapability.ATTACH_ARTIFACT
+
+
+def test_capabilities_are_defensively_frozen() -> None:
+    source = {WorkManagementCapability.READ_WORK_ITEM}
+    capabilities = ProviderCapabilities(source)
+
+    source.add(WorkManagementCapability.COMPLETE_WORK)
+
+    assert capabilities.values == frozenset({WorkManagementCapability.READ_WORK_ITEM})
