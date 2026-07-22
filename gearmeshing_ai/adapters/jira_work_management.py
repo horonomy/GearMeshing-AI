@@ -88,7 +88,7 @@ class JiraConfiguration:
     email: str = field(repr=False)
     api_token: str = field(repr=False, compare=False)
     project_key: str
-    repository: RepositoryReference
+    repository: RepositoryReference | None = None
     allow_writes: bool = False
     timeout_seconds: float = 15.0
     max_response_bytes: int = 1_000_000
@@ -104,8 +104,8 @@ class JiraConfiguration:
         if not _PROJECT_KEY.fullmatch(project_key):
             raise JiraConfigurationError("project_key must be an uppercase Jira project key")
         object.__setattr__(self, "project_key", project_key)
-        if not isinstance(self.repository, RepositoryReference):
-            raise JiraConfigurationError("repository must be a RepositoryReference")
+        if self.repository is not None and not isinstance(self.repository, RepositoryReference):
+            raise JiraConfigurationError("repository must be a RepositoryReference or None")
         if not isinstance(self.allow_writes, bool):
             raise JiraConfigurationError("allow_writes must be a boolean")
         for name, value in (
@@ -289,21 +289,22 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             raise JiraResponseError(f"Jira returned invalid {context}") from error
         return parsed
 
-    def _repository(self, properties: Mapping[str, object]) -> tuple[RepositoryReference, bool]:
+    def _repository(self, properties: Mapping[str, object]) -> tuple[RepositoryReference | None, bool]:
         raw_repository = properties.get(_REPOSITORY_PROPERTY)
         if raw_repository is None:
-            return self._configuration.repository, True
-        repository = self._object(raw_repository, "repository property")
+            configured_repository = self._configuration.repository
+            return configured_repository, configured_repository is not None
+        repository_property = self._object(raw_repository, "repository property")
         try:
             parsed = RepositoryReference(
-                provider=self._string(repository.get("provider"), "repository provider"),
-                owner=self._string(repository.get("owner"), "repository owner"),
-                name=self._string(repository.get("name"), "repository name"),
-                web_url=self._string(repository.get("webUrl"), "repository web URL"),
+                provider=self._string(repository_property.get("provider"), "repository provider"),
+                owner=self._string(repository_property.get("owner"), "repository owner"),
+                name=self._string(repository_property.get("name"), "repository name"),
+                web_url=self._string(repository_property.get("webUrl"), "repository web URL"),
             )
         except (TypeError, ValueError) as error:
             raise JiraResponseError("Jira repository property is invalid") from error
-        if parsed != self._configuration.repository:
+        if self._configuration.repository is not None and parsed != self._configuration.repository:
             raise JiraResponseError("Jira repository property does not match the configured repository")
         return parsed, True
 
@@ -402,6 +403,14 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                     code="missing-acceptance-criteria",
                     summary="Add acceptance criteria",
                     details="Add a non-empty Acceptance Criteria section to the Jira description.",
+                )
+            )
+        if work_item.repository is None:
+            problems.append(
+                ReadinessProblem(
+                    code="missing-repository-context",
+                    summary="Configure repository context",
+                    details="Provide an approved repository in adapter configuration or the Jira issue property.",
                 )
             )
         return ReadinessResult(work_item_key=work_item.key, problems=tuple(problems))
