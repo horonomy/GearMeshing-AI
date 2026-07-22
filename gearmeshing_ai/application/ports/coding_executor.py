@@ -141,3 +141,25 @@ class RepositoryContext:
         object.__setattr__(self, "base_ref", _identifier(self.base_ref, "base_ref"))
         object.__setattr__(self, "branch", _required_text(self.branch, "branch", maximum=256))
         object.__setattr__(self, "writable_paths", paths)
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovedSpecification:
+    """Immutable identity of the exact human-approved input."""
+
+    issue_key: str
+    revision: str
+    content_sha256: str
+    approved_by: str
+
+    def __post_init__(self) -> None:
+        issue_key = _required_text(self.issue_key, "issue_key", maximum=32)
+        if _ISSUE_KEY_PATTERN.fullmatch(issue_key) is None:
+            raise ValueError("issue_key must be an uppercase Jira issue key")
+        digest = self.content_sha256.strip().lower()
+        if _SHA256_PATTERN.fullmatch(digest) is None:
+            raise ValueError("content_sha256 must be a lowercase SHA-256 digest")
+        object.__setattr__(self, "issue_key", issue_key)
+        object.__setattr__(self, "revision", _identifier(self.revision, "revision"))
+        object.__setattr__(self, "content_sha256", digest)
+        object.__setattr__(self, "approved_by", _identifier(self.approved_by, "approved_by"))
