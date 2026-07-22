@@ -192,9 +192,9 @@ class WorkflowRunner:
         request = self._request(run, WorkflowStage.EXECUTION, 1)
         try:
             artifacts = self._executor.execute(request)
+            updated = self._attach_all(run, artifacts)
         except Exception:
             return self._fail(run, WorkflowStage.EXECUTION)
-        updated = self._attach_all(run, artifacts)
         return self._transition_from(run, updated, WorkRunState.VERIFYING)
 
     def _verify(self, run: WorkRun) -> WorkRun:
