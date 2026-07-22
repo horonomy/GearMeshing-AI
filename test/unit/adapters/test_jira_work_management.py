@@ -353,6 +353,22 @@ async def test_injected_client_cannot_override_destination_auth_or_request_polic
     assert observed["timeout"] == {"connect": 15.0, "read": 15.0, "write": 15.0, "pool": 15.0}
 
 
+async def test_injected_client_cannot_enable_cross_origin_redirects() -> None:
+    destinations: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        destinations.append(request.url.host)
+        return httpx.Response(302, headers={"Location": "https://untrusted.example/capture"})
+
+    client = httpx.AsyncClient(follow_redirects=True, transport=httpx.MockTransport(handler))
+    adapter = JiraWorkManagementProvider(configuration(), client=client)
+
+    with pytest.raises(JiraResponseError, match="HTTP 302"):
+        await adapter.get_work_item("GMAI-17")
+
+    assert destinations == ["lightning-dust-mite.atlassian.net"]
+
+
 async def test_disabled_writes_fail_as_explicit_unsupported_capabilities() -> None:
     update = ProgressUpdate(
         work_item_key="GMAI-17",
