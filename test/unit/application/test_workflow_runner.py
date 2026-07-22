@@ -353,3 +353,28 @@ def test_checkpoint_evidence_must_match_its_audit_prefix() -> None:
 
     with pytest.raises(WorkflowIntegrityError, match="evidence does not match"):
         runner.run(approved)
+
+
+def test_remediation_cycles_stop_at_the_configured_limit() -> None:
+    checkpoints = MemoryCheckpoints()
+    verifier = FakeVerifier([VerificationResult(passed=False) for _ in range(4)])
+    remediator = FakeRemediator()
+    runner = WorkflowRunner(
+        checkpoints=checkpoints,
+        executor=FakeExecutor(),
+        verifier=verifier,
+        remediator=remediator,
+        publisher=FakePublisher(),
+        clock=TickingClock(),
+        max_remediation_cycles=3,
+    )
+
+    failed = runner.run(_approved())
+
+    assert failed.state is WorkRunState.FAILED
+    assert len(verifier.requests) == 4
+    assert len(remediator.requests) == 3
+    assert failed.events[-1].details == (
+        ("failure_code", "remediation_limit_reached"),
+        ("stage", "verification"),
+    )
