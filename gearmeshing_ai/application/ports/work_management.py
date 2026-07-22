@@ -45,6 +45,17 @@ def _required_text(value: str, field: str, *, max_length: int = 256) -> str:
     return normalized
 
 
+def _optional_text(value: str, field: str, *, max_length: int) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string")
+    normalized = value.strip()
+    if len(normalized) > max_length:
+        raise ValueError(f"{field} must not exceed {max_length} characters")
+    if any(category(character).startswith("C") for character in normalized):
+        raise ValueError(f"{field} must not contain control characters")
+    return normalized
+
+
 def _https_url_without_credentials(value: str, field: str) -> str:
     normalized = _required_text(value, field, max_length=2048)
     parsed = urlsplit(normalized)
@@ -173,7 +184,7 @@ class WorkItem:
         object.__setattr__(
             self,
             "description",
-            _required_text(self.description, "description", max_length=50_000),
+            _optional_text(self.description, "description", max_length=50_000),
         )
         criteria = tuple(
             _required_text(criterion, "acceptance criterion", max_length=2_000)
