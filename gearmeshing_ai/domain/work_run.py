@@ -144,3 +144,31 @@ TERMINAL_STATES = frozenset(
         WorkRunState.CANCELLED,
     }
 )
+
+ALLOWED_TRANSITIONS: dict[WorkRunState, frozenset[WorkRunState]] = {
+    WorkRunState.APPROVED: frozenset(
+        {WorkRunState.EXECUTING, WorkRunState.BLOCKED, WorkRunState.FAILED, WorkRunState.CANCELLED}
+    ),
+    WorkRunState.EXECUTING: frozenset(
+        {WorkRunState.VERIFYING, WorkRunState.BLOCKED, WorkRunState.FAILED, WorkRunState.CANCELLED}
+    ),
+    WorkRunState.VERIFYING: frozenset(
+        {
+            WorkRunState.REMEDIATING,
+            WorkRunState.PUBLISHING_DRAFT_PR,
+            WorkRunState.BLOCKED,
+            WorkRunState.FAILED,
+            WorkRunState.CANCELLED,
+        }
+    ),
+    WorkRunState.REMEDIATING: frozenset(
+        {WorkRunState.VERIFYING, WorkRunState.BLOCKED, WorkRunState.FAILED, WorkRunState.CANCELLED}
+    ),
+    WorkRunState.PUBLISHING_DRAFT_PR: frozenset(
+        {WorkRunState.COMPLETED, WorkRunState.BLOCKED, WorkRunState.FAILED, WorkRunState.CANCELLED}
+    ),
+    WorkRunState.COMPLETED: frozenset(),
+    WorkRunState.FAILED: frozenset(),
+    WorkRunState.BLOCKED: frozenset(),
+    WorkRunState.CANCELLED: frozenset(),
+}
