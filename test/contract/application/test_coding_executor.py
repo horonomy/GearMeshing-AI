@@ -220,6 +220,19 @@ async def test_cancellation_after_started_matches_terminal_result() -> None:
     assert result.outcome is TerminalOutcome.CANCELLED
 
 
+async def test_cancellation_after_terminal_preserves_result() -> None:
+    executor = FakeCodingExecutor(capabilities=make_capabilities())
+    session = await executor.start(make_request())
+    events = [event async for event in session.events()]
+    before_cancel = await session.result()
+
+    await session.cancel("Too late to alter the result")
+
+    assert events[-1].metadata["outcome"] == TerminalOutcome.COMPLETED.value
+    assert await session.result() is before_cancel
+    assert before_cancel.outcome is TerminalOutcome.COMPLETED
+
+
 def test_execution_result_rejects_artifacts_over_the_byte_limit() -> None:
     request = make_request()
     oversized = ExecutionArtifact(
