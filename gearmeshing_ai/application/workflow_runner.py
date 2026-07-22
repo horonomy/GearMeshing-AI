@@ -175,10 +175,16 @@ class WorkflowRunner:
                 raise WorkflowIntegrityError("checkpoint transition is missing its canonical audit event")
             previous_state = event.state
 
-        recorded_artifacts = tuple(
-            (dict(event.details).get("artifact_id"), dict(event.details).get("kind")) for event in artifact_events
+        recorded_artifacts = tuple(event.details for event in artifact_events)
+        actual_artifacts = tuple(
+            (
+                ("artifact_id", artifact.artifact_id),
+                ("kind", artifact.kind),
+                ("uri", artifact.uri),
+                *((("sha256", artifact.sha256),) if artifact.sha256 is not None else ()),
+            )
+            for artifact in run.artifacts
         )
-        actual_artifacts = tuple((artifact.artifact_id, artifact.kind) for artifact in run.artifacts)
         if recorded_artifacts != actual_artifacts:
             raise WorkflowIntegrityError("checkpoint evidence does not match its audit events")
         if run.draft_pr_url is None and draft_pr_events:
