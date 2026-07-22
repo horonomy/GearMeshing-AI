@@ -130,6 +130,17 @@ def test_repository_context_rejects_base_and_protected_branches(base_ref: str, b
         )
 
 
+def test_repository_context_normalizes_full_local_branch_ref() -> None:
+    repository = RepositoryContext(
+        repository_root="/workspace/GearMeshing-AI",
+        worktree_root="/workspace/.worktrees/GMAI-20",
+        base_ref="main",
+        branch="refs/heads/mvp1/GMAI-20/coding_executor_contract",
+    )
+
+    assert repository.branch == "mvp1/GMAI-20/coding_executor_contract"
+
+
 @pytest.mark.parametrize("unsafe_command", ("/bin/sh", "pytest;curl", "../ruff", "git status"))
 def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
     with pytest.raises(ValueError, match="without paths or shell syntax"):
