@@ -18,6 +18,7 @@ class InvalidTransitionError(WorkRunValidationError):
 
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 _JIRA_ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
+_SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 
 
 def _require_identifier(value: str, field_name: str) -> str:
@@ -70,6 +71,27 @@ class WorkRunCorrelation:
             "agent_assembly_run_id",
             _require_identifier(self.agent_assembly_run_id, "agent_assembly_run_id"),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class WorkRunArtifact:
+    """An immutable reference to evidence produced by the run."""
+
+    artifact_id: str
+    kind: str
+    uri: str
+    sha256: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "artifact_id", _require_identifier(self.artifact_id, "artifact_id"))
+        object.__setattr__(self, "kind", _require_identifier(self.kind, "kind"))
+        object.__setattr__(
+            self,
+            "uri",
+            _require_safe_url(self.uri, "uri", schemes=frozenset({"artifact", "https"})),
+        )
+        if self.sha256 is not None and not _SHA256_PATTERN.fullmatch(self.sha256):
+            raise WorkRunValidationError("sha256 must be a lowercase hexadecimal SHA-256 digest")
 
 
 class WorkRunState(StrEnum):
