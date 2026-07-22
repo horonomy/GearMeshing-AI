@@ -209,3 +209,21 @@ class ResourceLimits:
             "max_artifact_bytes",
             _positive_int(self.max_artifact_bytes, "max_artifact_bytes"),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutorCapabilities:
+    """Discoverable behavior supported by an executor implementation."""
+
+    streaming: bool
+    cancellation: bool
+    tool_names: frozenset[str] = field(default_factory=frozenset)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.streaming, bool) or not isinstance(self.cancellation, bool):
+            raise ValueError("streaming and cancellation must be booleans")
+        object.__setattr__(
+            self,
+            "tool_names",
+            frozenset(_identifier(tool, "tool name") for tool in self.tool_names),
+        )
