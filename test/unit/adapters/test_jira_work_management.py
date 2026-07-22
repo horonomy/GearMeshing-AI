@@ -101,6 +101,7 @@ def test_configuration_is_immutable_bounded_and_credential_safe() -> None:
     value = configuration()
 
     assert "not-a-real-token" not in repr(value)
+    assert "engineer@example.com" not in repr(value)
     with pytest.raises(FrozenInstanceError):
         value.site_url = "https://example.com"  # type: ignore[misc]
     with pytest.raises(JiraConfigurationError):
