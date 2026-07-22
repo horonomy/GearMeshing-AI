@@ -19,7 +19,9 @@ _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _COMMAND_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
-_SENSITIVE_KEY_PARTS = ("authorization", "credential", "password", "secret", "token")
+_SENSITIVE_KEY_PARTS = frozenset(
+    {"authorization", "bearer", "cookie", "credential", "password", "secret", "session", "token"}
+)
 _PROTECTED_BRANCHES = frozenset({"main", "master"})
 
 
@@ -98,10 +100,22 @@ def _git_ref(value: str, name: str) -> str:
 def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
     snapshot: dict[str, MetadataValue] = {}
     for raw_key, value in metadata.items():
-        key = _required_text(raw_key, "metadata key", maximum=64)
-        lowered = key.casefold()
-        if any(part in lowered for part in _SENSITIVE_KEY_PARTS):
-            raise ValueError(f"metadata key {key!r} may contain credentials")
+        key_text = _required_text(raw_key, "metadata key", maximum=64)
+        separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key_text)
+        key = re.sub(r"[^a-z0-9]+", "_", separated.casefold()).strip("_")
+        if not key:
+            raise ValueError("metadata key must contain letters or digits")
+        parts = frozenset(key.split("_"))
+        key_bearing_secret = "key" in parts and bool(parts & {"access", "api", "private"})
+        collapsed_key = key.replace("_", "")
+        if (
+            parts & _SENSITIVE_KEY_PARTS
+            or key_bearing_secret
+            or collapsed_key in {"accesskey", "apikey", "privatekey"}
+        ):
+            raise ValueError(f"metadata key {key_text!r} may contain credentials")
+        if key in snapshot:
+            raise ValueError(f"metadata keys normalize to duplicate {key!r}")
         if isinstance(value, bool):
             raise ValueError(f"metadata value for {key!r} must not be boolean")
         if isinstance(value, float) and not math.isfinite(value):
