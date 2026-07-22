@@ -179,6 +179,30 @@ def test_verification_results_require_a_strict_boolean_decision() -> None:
         VerificationResult(passed="false")  # type: ignore[arg-type]
 
 
+def test_malformed_verifier_responses_become_terminal_failures() -> None:
+    class MalformedVerifier:
+        def verify(self, request: StageRequest) -> object:
+            return object()
+
+    checkpoints = MemoryCheckpoints()
+    runner = WorkflowRunner(
+        checkpoints=checkpoints,
+        executor=FakeExecutor(),
+        verifier=MalformedVerifier(),  # type: ignore[arg-type]
+        remediator=FakeRemediator(),
+        publisher=FakePublisher(),
+        clock=TickingClock(),
+    )
+
+    failed = runner.run(_approved())
+
+    assert failed.state is WorkRunState.FAILED
+    assert failed.events[-1].details == (
+        ("failure_code", "operation_failed"),
+        ("stage", "verification"),
+    )
+
+
 def test_replaying_an_approved_run_does_not_repeat_side_effects() -> None:
     approved = _approved()
     checkpoints = MemoryCheckpoints()
