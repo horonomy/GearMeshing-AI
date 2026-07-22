@@ -55,8 +55,16 @@ def _finite_positive_float(value: float, name: str) -> float:
 def _relative_path(value: str, name: str) -> str:
     normalized = _required_text(value, name, maximum=1024)
     path = PurePosixPath(normalized)
-    if path.is_absolute() or normalized != path.as_posix() or ".." in path.parts:
+    if normalized == "." or path.is_absolute() or normalized != path.as_posix() or ".." in path.parts:
         raise ValueError(f"{name} must be a normalized relative POSIX path")
+    return normalized
+
+
+def _absolute_path(value: str, name: str) -> str:
+    normalized = _required_text(value, name, maximum=1024)
+    path = PurePosixPath(normalized)
+    if not path.is_absolute() or normalized != path.as_posix() or ".." in path.parts or path == PurePosixPath("/"):
+        raise ValueError(f"{name} must be a normalized absolute POSIX path")
     return normalized
 
 
@@ -126,10 +134,8 @@ class RepositoryContext:
     writable_paths: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        repository_root = PurePosixPath(_required_text(self.repository_root, "repository_root", maximum=1024))
-        worktree_root = PurePosixPath(_required_text(self.worktree_root, "worktree_root", maximum=1024))
-        if not repository_root.is_absolute() or not worktree_root.is_absolute():
-            raise ValueError("repository and worktree roots must be absolute POSIX paths")
+        repository_root = PurePosixPath(_absolute_path(self.repository_root, "repository_root"))
+        worktree_root = PurePosixPath(_absolute_path(self.worktree_root, "worktree_root"))
         if repository_root == worktree_root:
             raise ValueError("worktree_root must be isolated from repository_root")
         if repository_root in worktree_root.parents or worktree_root in repository_root.parents:
