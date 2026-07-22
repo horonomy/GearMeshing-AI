@@ -95,3 +95,17 @@ def test_verification_can_cycle_through_remediation() -> None:
         WorkRunState.REMEDIATING,
         WorkRunState.VERIFYING,
     ]
+
+
+def test_invalid_transition_is_rejected_without_changing_the_run() -> None:
+    approved = _approved()
+
+    with pytest.raises(InvalidTransitionError, match="approved to verifying"):
+        approved.transition_to(
+            WorkRunState.VERIFYING,
+            actor_id="agent-assembly",
+            occurred_at=NOW + timedelta(minutes=1),
+        )
+
+    assert approved.state is WorkRunState.APPROVED
+    assert len(approved.events) == 1
