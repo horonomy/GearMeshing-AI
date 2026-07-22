@@ -71,3 +71,10 @@ def test_fake_satisfies_provider_neutral_protocol() -> None:
 
     assert executor.capabilities.streaming is True
     assert executor.capabilities.cancellation is True
+
+
+def test_repository_context_accepts_an_isolated_sibling_worktree() -> None:
+    repository = make_request().repository
+
+    assert repository.repository_root == "/workspace/GearMeshing-AI"
+    assert repository.worktree_root == "/workspace/.worktrees/GMAI-20"
