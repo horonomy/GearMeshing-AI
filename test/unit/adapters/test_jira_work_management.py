@@ -236,3 +236,13 @@ async def test_streamed_response_is_rejected_at_the_byte_limit() -> None:
 
     with pytest.raises(JiraResponseError, match="byte limit"):
         await adapter.get_work_item("GMAI-17")
+
+
+async def test_invalid_request_url_is_mapped_to_a_safe_configuration_error() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        raise httpx.InvalidURL("invalid internal URL")
+
+    with pytest.raises(JiraConfigurationError, match="request URL is invalid") as caught:
+        await provider(handler).get_work_item("GMAI-17")
+
+    assert "not-a-real-token" not in str(caught.value)
