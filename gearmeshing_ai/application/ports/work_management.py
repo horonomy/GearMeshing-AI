@@ -367,9 +367,14 @@ class WorkManagementProvider(ABC):
     async def _get_work_item(self, work_item_key: str) -> WorkItem:
         """Load a work item after the base capability guard succeeds."""
 
-    @abstractmethod
     async def evaluate_readiness(self, work_item: WorkItem) -> ReadinessResult:
         """Evaluate whether the supplied work item is ready for execution."""
+        self.require_capability(WorkManagementCapability.EVALUATE_READINESS)
+        return await self._evaluate_readiness(work_item)
+
+    @abstractmethod
+    async def _evaluate_readiness(self, work_item: WorkItem) -> ReadinessResult:
+        """Evaluate readiness after the base capability guard succeeds."""
 
     @abstractmethod
     async def update_progress(self, update: ProgressUpdate) -> OperationReceipt:
