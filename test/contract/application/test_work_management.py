@@ -143,3 +143,9 @@ def test_metadata_is_recursively_copied_and_frozen() -> None:
 def test_metadata_rejects_sensitive_keys_at_any_depth(key: str) -> None:
     with pytest.raises(ValueError, match="sensitive key"):
         Metadata({"context": {key: "must-not-leak"}})
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("nan"), object()])
+def test_metadata_rejects_non_serializable_values(value: object) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        Metadata({"value": value})
