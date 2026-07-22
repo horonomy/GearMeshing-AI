@@ -31,6 +31,10 @@ class JiraIdempotencyConflictError(JiraAdapterError):
     """Raised when an idempotency key is reused for a different operation."""
 
 
+class JiraWriteValidationError(JiraAdapterError):
+    """Raised when a valid domain update cannot fit Jira's write contract."""
+
+
 class JiraResponseError(JiraAdapterError):
     """Raised for malformed, oversized, or unsuccessful Jira responses."""
 
