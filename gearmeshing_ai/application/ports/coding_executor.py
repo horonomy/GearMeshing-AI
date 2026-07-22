@@ -359,6 +359,10 @@ class ExecutionEvent:
     artifact: ExecutionArtifact | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.kind, EventKind):
+            raise ValueError("kind must be an EventKind")
+        if self.artifact is not None and not isinstance(self.artifact, ExecutionArtifact):
+            raise ValueError("artifact must be an ExecutionArtifact")
         if (self.kind is EventKind.ARTIFACT) is (self.artifact is None):
             raise ValueError("artifact events require exactly one typed artifact payload")
         object.__setattr__(self, "sequence", _positive_int(self.sequence, "sequence"))
