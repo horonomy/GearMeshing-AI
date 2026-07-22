@@ -427,8 +427,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                         matching_property = prop
                         break
                     if property_value == idempotency_key or (
-                        isinstance(property_value, Mapping)
-                        and property_value.get("idempotencyKey") == idempotency_key
+                        isinstance(property_value, Mapping) and property_value.get("idempotencyKey") == idempotency_key
                     ):
                         raise JiraIdempotencyConflictError(
                             "Jira idempotency key is already bound to a different operation or payload"
