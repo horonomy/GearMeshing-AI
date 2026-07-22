@@ -114,6 +114,20 @@ def test_repository_context_rejects_unsafe_git_refs(unsafe_ref: str) -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("base_ref", "branch"),
+    (("main", "main"), ("refs/heads/main", "main"), ("develop", "master"), ("develop", "refs/heads/main")),
+)
+def test_repository_context_rejects_base_and_protected_branches(base_ref: str, branch: str) -> None:
+    with pytest.raises(ValueError, match="must not be protected"):
+        RepositoryContext(
+            repository_root="/workspace/GearMeshing-AI",
+            worktree_root="/workspace/.worktrees/GMAI-20",
+            base_ref=base_ref,
+            branch=branch,
+        )
+
+
 @pytest.mark.parametrize("unsafe_command", ("/bin/sh", "pytest;curl", "../ruff", "git status"))
 def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
     with pytest.raises(ValueError, match="without paths or shell syntax"):
