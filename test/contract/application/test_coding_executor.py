@@ -81,6 +81,11 @@ def test_execution_event_rejects_string_kind_at_runtime() -> None:
         ExecutionEvent(1, cast("EventKind", "started"), "Started")
 
 
+def test_execution_event_rejects_string_artifact_at_runtime() -> None:
+    with pytest.raises(ValueError, match="artifact must be an ExecutionArtifact"):
+        ExecutionEvent(1, EventKind.ARTIFACT, "Artifact", artifact=cast("ExecutionArtifact", "artifact"))
+
+
 def test_repository_context_accepts_an_isolated_sibling_worktree() -> None:
     repository = make_request().repository
 
