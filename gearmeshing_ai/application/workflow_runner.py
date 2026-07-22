@@ -25,6 +25,7 @@ class WorkflowIntegrityError(RuntimeError):
 class WorkflowStage(StrEnum):
     """Stable names used to scope idempotent workflow operations."""
 
+    INGEST = "ingest"
     EXECUTION = "execution"
     VERIFICATION = "verification"
     REMEDIATION = "remediation"
@@ -124,7 +125,7 @@ class WorkflowRunner:
         """Run or idempotently resume one pristine, human-approved work run."""
 
         self._validate_approved_input(approved)
-        current = self._restore(approved)
+        current = self._ingest(approved)
         while current.state not in TERMINAL_STATES:
             if current.state is WorkRunState.APPROVED:
                 current = self._transition(current, WorkRunState.EXECUTING)
@@ -140,7 +141,8 @@ class WorkflowRunner:
                 raise WorkflowIntegrityError(f"unsupported checkpoint state: {current.state.value}")
         return current
 
-    def _restore(self, approved: WorkRun) -> WorkRun:
+    def _ingest(self, approved: WorkRun) -> WorkRun:
+        """Persist the approved input once, or resume its trusted checkpoint."""
         checkpoint = self._checkpoints.load(approved.run_id)
         if checkpoint is None:
             self._checkpoints.save(expected=None, updated=approved)
