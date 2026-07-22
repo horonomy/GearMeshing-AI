@@ -358,9 +358,14 @@ class WorkManagementProvider(ABC):
         """Fail explicitly when orchestration requests an unsupported operation."""
         self.capabilities.require(self.name, capability)
 
-    @abstractmethod
     async def get_work_item(self, work_item_key: str) -> WorkItem:
         """Load the current provider snapshot for a work item."""
+        self.require_capability(WorkManagementCapability.READ_WORK_ITEM)
+        return await self._get_work_item(work_item_key)
+
+    @abstractmethod
+    async def _get_work_item(self, work_item_key: str) -> WorkItem:
+        """Load a work item after the base capability guard succeeds."""
 
     @abstractmethod
     async def evaluate_readiness(self, work_item: WorkItem) -> ReadinessResult:
