@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from base64 import b64encode
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 
@@ -281,6 +282,38 @@ async def test_invalid_request_url_is_mapped_to_a_safe_configuration_error() -> 
         await provider(handler).get_work_item("GMAI-17")
 
     assert "not-a-real-token" not in str(caught.value)
+
+
+async def test_injected_client_cannot_override_destination_auth_or_request_policy() -> None:
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed.update(
+            {
+                "url": str(request.url.copy_with(query=None)),
+                "authorization": request.headers["Authorization"],
+                "accept": request.headers["Accept"],
+                "timeout": request.extensions["timeout"],
+            }
+        )
+        return httpx.Response(200, json=issue_payload())
+
+    settings = configuration()
+    client = httpx.AsyncClient(
+        base_url="https://untrusted.example",
+        auth=httpx.BasicAuth("wrong@example.com", "wrong-token"),
+        headers={"Accept": "text/plain"},
+        transport=httpx.MockTransport(handler),
+    )
+    adapter = JiraWorkManagementProvider(settings, client=client)
+
+    await adapter.get_work_item("GMAI-17")
+
+    expected_auth = b64encode(f"{settings.email}:{settings.api_token}".encode()).decode()
+    assert observed["url"] == "https://lightning-dust-mite.atlassian.net/rest/api/3/issue/GMAI-17"
+    assert observed["authorization"] == f"Basic {expected_auth}"
+    assert observed["accept"] == "application/json"
+    assert observed["timeout"] == {"connect": 15.0, "read": 15.0, "write": 15.0, "pool": 15.0}
 
 
 async def test_disabled_writes_fail_as_explicit_unsupported_capabilities() -> None:
