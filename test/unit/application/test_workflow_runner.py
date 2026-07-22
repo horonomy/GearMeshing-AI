@@ -238,6 +238,21 @@ def test_operation_failures_are_recorded_without_exception_secrets() -> None:
     assert "should-never-be-recorded" not in repr(checkpoints.saved)
 
 
+def test_invalid_stage_results_are_recorded_as_failures() -> None:
+    duplicate = _artifact("duplicate")
+    checkpoints = MemoryCheckpoints()
+    runner, *_ = _runner(checkpoints, executor=FakeExecutor((duplicate, duplicate)))
+
+    failed = runner.run(_approved())
+
+    assert failed.state is WorkRunState.FAILED
+    assert failed.artifacts == ()
+    assert failed.events[-1].details == (
+        ("failure_code", "operation_failed"),
+        ("stage", "execution"),
+    )
+
+
 def test_checkpoint_rejects_events_outside_the_governed_history() -> None:
     approved = _approved()
     tampered_event = WorkRunEvent(
