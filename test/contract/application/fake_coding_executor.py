@@ -137,9 +137,7 @@ class FakeCodingExecutor:
         failure: FailureMetadata | None = None,
     ) -> None:
         self._capabilities = capabilities
-        self._progress_messages = tuple(
-            _text(message, "progress message", 2048) for message in progress_messages
-        )
+        self._progress_messages = tuple(_text(message, "progress message", 2048) for message in progress_messages)
         self._outcome = outcome
         self._artifacts = tuple(artifacts)
         self._failure = failure
