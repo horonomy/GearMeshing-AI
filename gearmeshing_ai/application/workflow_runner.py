@@ -202,9 +202,9 @@ class WorkflowRunner:
         request = self._request(run, WorkflowStage.VERIFICATION, attempt)
         try:
             result = self._verifier.verify(request)
+            updated = self._attach_all(run, result.artifacts)
         except Exception:
             return self._fail(run, WorkflowStage.VERIFICATION)
-        updated = self._attach_all(run, result.artifacts)
         if result.passed:
             return self._transition_from(run, updated, WorkRunState.PUBLISHING_DRAFT_PR)
         if attempt > self._max_remediation_cycles:
