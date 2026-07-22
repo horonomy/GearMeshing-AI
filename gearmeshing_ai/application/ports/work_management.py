@@ -243,6 +243,32 @@ class BlockerUpdate:
             raise TypeError("metadata must be Metadata")
 
 
+@dataclass(frozen=True, slots=True)
+class CompletionUpdate:
+    """Idempotent request to mark an item complete with evidence."""
+
+    work_item_key: str
+    idempotency_key: str
+    summary: str
+    evidence_urls: tuple[str, ...]
+    metadata: Metadata = Metadata()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
+        object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
+        object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
+        evidence_urls = tuple(
+            _https_url_without_credentials(url, "evidence_url") for url in self.evidence_urls
+        )
+        if not evidence_urls:
+            raise ValueError("evidence_urls must contain at least one URL")
+        if len(set(evidence_urls)) != len(evidence_urls):
+            raise ValueError("evidence_urls must not contain duplicates")
+        object.__setattr__(self, "evidence_urls", evidence_urls)
+        if not isinstance(self.metadata, Metadata):
+            raise TypeError("metadata must be Metadata")
+
+
 class WorkManagementProvider(ABC):
     """Boundary implemented by external work-management adapters."""
 
