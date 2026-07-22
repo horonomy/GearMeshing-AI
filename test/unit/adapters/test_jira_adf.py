@@ -19,9 +19,7 @@ def test_parser_extracts_acceptance_criteria_from_adf_structure() -> None:
                 "content": [
                     {
                         "type": "listItem",
-                        "content": [
-                            {"type": "paragraph", "content": [{"type": "text", "text": "Return diagnostics"}]}
-                        ],
+                        "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Return diagnostics"}]}],
                     }
                 ],
             },
