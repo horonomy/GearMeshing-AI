@@ -180,6 +180,28 @@ class WorkRun:
             events=(event,),
         )
 
+    def transition_to(
+        self,
+        target: WorkRunState,
+        *,
+        actor_id: str,
+        occurred_at: datetime,
+        details: tuple[tuple[str, str], ...] = (),
+    ) -> WorkRun:
+        """Advance to a permitted state and append its audit event."""
+
+        if target not in ALLOWED_TRANSITIONS[self.state]:
+            raise InvalidTransitionError(f"cannot transition from {self.state.value} to {target.value}")
+        event = WorkRunEvent(
+            sequence=len(self.events) + 1,
+            name=f"entered_{target.value}",
+            state=target,
+            actor_id=actor_id,
+            occurred_at=occurred_at,
+            details=details,
+        )
+        return replace(self, state=target, events=(*self.events, event))
+
 
 class WorkRunState(StrEnum):
     """A stable state in the governed work-run lifecycle."""
