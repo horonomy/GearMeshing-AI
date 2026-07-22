@@ -126,6 +126,15 @@ async def test_ready_issue_is_normalized_without_inventing_requirements() -> Non
     assert readiness.ready is True
 
 
+async def test_response_issue_key_must_match_the_requested_issue() -> None:
+    payload = issue_payload()
+    payload["key"] = "GMAI-18"
+    adapter = provider(lambda _: httpx.Response(200, json=payload))
+
+    with pytest.raises(JiraResponseError, match="does not match"):
+        await adapter.get_work_item("GMAI-17")
+
+
 async def test_incomplete_issue_returns_actionable_blocking_diagnostics() -> None:
     adapter = provider(
         lambda _: httpx.Response(
