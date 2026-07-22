@@ -27,6 +27,7 @@ from gearmeshing_ai.adapters.jira_errors import (
     JiraRateLimitError,
     JiraResponseError,
     JiraTransportError,
+    JiraWriteValidationError,
 )
 from gearmeshing_ai.application.ports.work_management import (
     ArtifactUpdate,
@@ -474,6 +475,10 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         """
         self.require_capability(capability)
         key = self._validated_issue_key(work_item_key)
+        try:
+            comment_document = paragraph_document(text)
+        except ValueError as error:
+            raise JiraWriteValidationError("Jira comment exceeds the supported ADF text boundary") from error
         operation_digest = hashlib.sha256(f"{capability.value}\0{text}".encode()).hexdigest()
         operation_binding: dict[str, JsonValue] = {
             "idempotencyKey": idempotency_key,
@@ -487,7 +492,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                 "POST",
                 f"/rest/api/3/issue/{quote(key, safe='')}/comment",
                 body={
-                    "body": paragraph_document(text),
+                    "body": comment_document,
                     "properties": [{"key": _IDEMPOTENCY_PROPERTY, "value": operation_binding}],
                 },
             ),
