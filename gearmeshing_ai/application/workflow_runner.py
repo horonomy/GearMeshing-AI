@@ -216,9 +216,9 @@ class WorkflowRunner:
         request = self._request(run, WorkflowStage.REMEDIATION, attempt)
         try:
             artifacts = self._remediator.remediate(request)
+            updated = self._attach_all(run, artifacts)
         except Exception:
             return self._fail(run, WorkflowStage.REMEDIATION)
-        updated = self._attach_all(run, artifacts)
         return self._transition_from(run, updated, WorkRunState.VERIFYING)
 
     def _publish(self, run: WorkRun) -> WorkRun:
