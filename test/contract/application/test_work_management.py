@@ -62,23 +62,23 @@ class FakeProvider(WorkManagementProvider):
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(set(WorkManagementCapability))
 
-    async def get_work_item(self, work_item_key: str) -> WorkItem:
+    async def _get_work_item(self, work_item_key: str) -> WorkItem:
         assert work_item_key == "GMAI-16"
         return work_item()
 
-    async def evaluate_readiness(self, item: WorkItem) -> ReadinessResult:
+    async def _evaluate_readiness(self, item: WorkItem) -> ReadinessResult:
         return ReadinessResult(work_item_key=item.key)
 
-    async def update_progress(self, update: ProgressUpdate) -> OperationReceipt:
+    async def _update_progress(self, update: ProgressUpdate) -> OperationReceipt:
         return receipt(update.idempotency_key)
 
-    async def report_blocker(self, update: BlockerUpdate) -> OperationReceipt:
+    async def _report_blocker(self, update: BlockerUpdate) -> OperationReceipt:
         return receipt(update.idempotency_key)
 
-    async def complete_work(self, update: CompletionUpdate) -> OperationReceipt:
+    async def _complete_work(self, update: CompletionUpdate) -> OperationReceipt:
         return receipt(update.idempotency_key)
 
-    async def attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
+    async def _attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
         return receipt(update.idempotency_key)
 
 
