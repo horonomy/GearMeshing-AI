@@ -188,3 +188,34 @@ def test_replaying_an_approved_run_does_not_repeat_side_effects() -> None:
     assert len(verifier.requests) == 1
     assert len(publisher.requests) == 1
     assert len(checkpoints.saved) == save_count
+
+
+def test_remediation_appends_evidence_without_rewriting_history() -> None:
+    approved = _approved()
+    checkpoints = MemoryCheckpoints()
+    runner, _, verifier, remediator, _ = _runner(
+        checkpoints,
+        executor=FakeExecutor((_artifact("implementation"),)),
+        verifier=FakeVerifier(
+            [
+                VerificationResult(passed=False, artifacts=(_artifact("failed-check"),)),
+                VerificationResult(passed=True, artifacts=(_artifact("passed-check"),)),
+            ]
+        ),
+        remediator=FakeRemediator((_artifact("remediation"),)),
+    )
+
+    completed = runner.run(approved)
+
+    assert approved.artifacts == ()
+    assert tuple(artifact.artifact_id for artifact in completed.artifacts) == (
+        "implementation",
+        "failed-check",
+        "remediation",
+        "passed-check",
+    )
+    assert [request.idempotency_key for request in verifier.requests] == [
+        "work-run-13:verification:1",
+        "work-run-13:verification:2",
+    ]
+    assert remediator.requests[0].idempotency_key == "work-run-13:remediation:1"
