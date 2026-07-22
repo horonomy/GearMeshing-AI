@@ -394,9 +394,14 @@ class WorkManagementProvider(ABC):
     async def _report_blocker(self, update: BlockerUpdate) -> OperationReceipt:
         """Publish a blocker after the base capability guard succeeds."""
 
-    @abstractmethod
     async def complete_work(self, update: CompletionUpdate) -> OperationReceipt:
         """Mark work complete with reviewable evidence."""
+        self.require_capability(WorkManagementCapability.COMPLETE_WORK)
+        return await self._complete_work(update)
+
+    @abstractmethod
+    async def _complete_work(self, update: CompletionUpdate) -> OperationReceipt:
+        """Complete work after the base capability guard succeeds."""
 
     @abstractmethod
     async def attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
