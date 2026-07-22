@@ -233,3 +233,24 @@ class ExecutorCapabilities:
             "tool_names",
             frozenset(_identifier(tool, "tool name") for tool in self.tool_names),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionRequest:
+    """Complete governed input needed to start one execution."""
+
+    execution_id: str
+    specification: ApprovedSpecification
+    repository: RepositoryContext
+    limits: ResourceLimits
+    tool_grants: tuple[ToolGrant, ...]
+    metadata: FrozenMetadata = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        grants = tuple(self.tool_grants)
+        names = tuple(grant.tool for grant in grants)
+        if len(names) != len(set(names)):
+            raise ValueError("tool_grants must contain at most one grant per tool")
+        object.__setattr__(self, "execution_id", _identifier(self.execution_id, "execution_id"))
+        object.__setattr__(self, "tool_grants", grants)
+        object.__setattr__(self, "metadata", _frozen_metadata(self.metadata))
