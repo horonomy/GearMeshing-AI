@@ -189,3 +189,13 @@ def test_progress_updates_reject_invalid_percentages(percent: object) -> None:
             summary="Implementing contract",
             percent_complete=percent,  # type: ignore[arg-type]
         )
+
+
+def test_blocker_updates_require_actionable_details() -> None:
+    with pytest.raises(ValueError, match="details"):
+        BlockerUpdate(
+            work_item_key="GMAI-16",
+            idempotency_key="run-1:blocker",
+            summary="Approval unavailable",
+            details=" ",
+        )
