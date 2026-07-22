@@ -739,6 +739,26 @@ async def test_blocked_readiness_result_can_be_posted_to_jira() -> None:
     assert "Add acceptance criteria" in serialized
 
 
+@pytest.mark.parametrize("idempotency_key", ["", "unsafe\nkey", "x" * 257])
+async def test_raw_readiness_idempotency_key_is_validated_before_network(
+    idempotency_key: str,
+) -> None:
+    requests = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(500)
+
+    with pytest.raises(JiraWriteValidationError, match="idempotency_key"):
+        await provider(handler, allow_writes=True).publish_readiness(
+            ReadinessResult(work_item_key="GMAI-17"),
+            idempotency_key,
+        )
+
+    assert requests == 0
+
+
 async def test_non_finite_json_response_is_rejected() -> None:
     adapter = provider(lambda _: httpx.Response(200, content=b'{"unsafe": NaN}'))
 
