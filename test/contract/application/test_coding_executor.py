@@ -141,6 +141,17 @@ def test_repository_context_normalizes_full_local_branch_ref() -> None:
     assert repository.branch == "mvp1/GMAI-20/coding_executor_contract"
 
 
+@pytest.mark.parametrize("pseudo_branch", ("HEAD", "@", "refs/tags/v1", "refs/remotes/origin/feature"))
+def test_repository_context_rejects_non_local_branch_refs(pseudo_branch: str) -> None:
+    with pytest.raises(ValueError, match="local branch"):
+        RepositoryContext(
+            repository_root="/workspace/GearMeshing-AI",
+            worktree_root="/workspace/.worktrees/GMAI-20",
+            base_ref="main",
+            branch=pseudo_branch,
+        )
+
+
 @pytest.mark.parametrize("unsafe_command", ("/bin/sh", "pytest;curl", "../ruff", "git status"))
 def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
     with pytest.raises(ValueError, match="without paths or shell syntax"):
