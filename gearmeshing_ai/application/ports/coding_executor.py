@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+from hashlib import sha256
 from collections.abc import AsyncIterator, Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -149,6 +150,7 @@ class ApprovedSpecification:
 
     issue_key: str
     revision: str
+    content: str
     content_sha256: str
     approved_by: str
 
@@ -159,8 +161,12 @@ class ApprovedSpecification:
         digest = self.content_sha256.strip().lower()
         if _SHA256_PATTERN.fullmatch(digest) is None:
             raise ValueError("content_sha256 must be a lowercase SHA-256 digest")
+        content = _required_text(self.content, "content", maximum=1_000_000)
+        if sha256(content.encode()).hexdigest() != digest:
+            raise ValueError("content_sha256 does not match content")
         object.__setattr__(self, "issue_key", issue_key)
         object.__setattr__(self, "revision", _identifier(self.revision, "revision"))
+        object.__setattr__(self, "content", content)
         object.__setattr__(self, "content_sha256", digest)
         object.__setattr__(self, "approved_by", _identifier(self.approved_by, "approved_by"))
 
