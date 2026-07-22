@@ -375,14 +375,6 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                     details="Add a non-empty Acceptance Criteria section to the Jira description.",
                 )
             )
-        if metadata.get("repository_context_present") is not True:
-            problems.append(
-                ReadinessProblem(
-                    code="missing-repository-context",
-                    summary="Add repository context",
-                    details="Configure the approved repository identity before execution.",
-                )
-            )
         return ReadinessResult(work_item_key=work_item.key, problems=tuple(problems))
 
     async def _find_comment(self, key: str, idempotency_key: str) -> OperationReceipt | None:
