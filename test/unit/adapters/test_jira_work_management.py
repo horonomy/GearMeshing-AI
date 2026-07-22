@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
+import json
 
 import httpx
 import pytest
@@ -296,3 +297,29 @@ async def test_repeated_write_reuses_comment_with_matching_idempotency_property(
 
     assert receipt.provider_reference == "10001"
     assert requests == ["GET"]
+
+
+async def test_new_progress_write_posts_adf_with_an_idempotency_property() -> None:
+    posted: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"comments": [], "total": 0})
+        posted.update(json.loads(request.content))
+        return httpx.Response(201, json={"id": "10002", "created": "2026-07-22T05:01:00Z"})
+
+    receipt = await provider(handler, allow_writes=True).update_progress(
+        ProgressUpdate(
+            work_item_key="GMAI-17",
+            idempotency_key="run-1:progress:75",
+            summary="Verifying adapter",
+            percent_complete=75,
+        )
+    )
+
+    assert receipt.provider_reference == "10002"
+    assert posted["body"] == adf(paragraph("GearMeshing-AI progress (75%): Verifying adapter"))
+    assert posted["properties"] == [
+        {"key": "gearmeshing-ai.idempotency-key", "value": "run-1:progress:75"}
+    ]
+    assert "not-a-real-token" not in json.dumps(posted)
