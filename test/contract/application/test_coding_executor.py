@@ -34,6 +34,8 @@ def make_request(
     execution_id: str = "execution-1",
     metadata: dict[str, str | int | float | None] | None = None,
     max_events: int = 10,
+    max_artifacts: int = 2,
+    max_artifact_bytes: int = 1024,
 ) -> ExecutionRequest:
     return ExecutionRequest(
         execution_id=execution_id,
@@ -54,8 +56,8 @@ def make_request(
         limits=ResourceLimits(
             wall_clock_seconds=60.0,
             max_events=max_events,
-            max_artifacts=2,
-            max_artifact_bytes=1024,
+            max_artifacts=max_artifacts,
+            max_artifact_bytes=max_artifact_bytes,
         ),
         tool_grants=(ToolGrant("shell", frozenset({"execute"}), ("pytest", "ruff")),),
         metadata={} if metadata is None else metadata,
