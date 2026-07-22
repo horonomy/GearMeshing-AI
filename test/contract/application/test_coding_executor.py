@@ -329,6 +329,22 @@ async def test_cancellation_after_terminal_preserves_result() -> None:
     assert before_cancel.outcome is TerminalOutcome.COMPLETED
 
 
+async def test_cancellation_preserves_already_streamed_artifacts() -> None:
+    artifact = ExecutionArtifact("reports/result.json", "application/json", ARTIFACT_DIGEST, 5)
+    executor = FakeCodingExecutor(capabilities=make_capabilities(), artifacts=(artifact,))
+    session = await executor.start(make_request())
+    stream = session.events()
+
+    assert (await anext(stream)).kind is EventKind.STARTED
+    assert (await anext(stream)).artifact is artifact
+    await session.cancel("Stopped after artifact")
+    remaining = [event async for event in stream]
+    result = await session.result()
+
+    assert remaining[-1].metadata["outcome"] == TerminalOutcome.CANCELLED.value
+    assert result.artifacts == (artifact,)
+
+
 def test_execution_result_rejects_artifacts_over_the_byte_limit() -> None:
     request = make_request()
     oversized = ExecutionArtifact(
