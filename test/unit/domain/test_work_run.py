@@ -1,5 +1,6 @@
 """Tests for the governed WorkRun aggregate."""
 
+from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -207,3 +208,12 @@ def test_artifacts_reject_disallowed_or_credentialed_uris(uri: str) -> None:
             kind="verification",
             uri=uri,
         )
+
+
+def test_work_run_and_event_records_are_frozen() -> None:
+    run = _approved()
+
+    with pytest.raises(FrozenInstanceError):
+        run.state = WorkRunState.EXECUTING  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        run.events[0].actor_id = "replacement-actor"  # type: ignore[misc]
