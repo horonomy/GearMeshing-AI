@@ -304,3 +304,17 @@ def test_draft_pr_retry_reuses_its_key_and_records_one_url() -> None:
     ]
     assert sum(event.name == "draft_pr_recorded" for event in completed.events) == 1
     assert completed.draft_pr_url == "https://github.com/horonomy/GearMeshing-AI/pull/3"
+
+
+def test_checkpoint_cannot_change_external_correlation() -> None:
+    approved = _approved()
+    changed_correlation = replace(
+        approved.correlation,
+        branch_name="mvp1/GMAI-13/unapproved_branch",
+        agent_assembly_run_id="different-assembly-run",
+    )
+    checkpoint = replace(approved, correlation=changed_correlation)
+    runner, *_ = _runner(MemoryCheckpoints(checkpoint))
+
+    with pytest.raises(WorkflowIntegrityError, match="does not extend"):
+        runner.run(approved)
