@@ -338,6 +338,31 @@ def test_execution_result_requires_failure_for_non_success_outcome() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("outcome", "wrong_category"),
+    (
+        (TerminalOutcome.CANCELLED, FailureCategory.TIMEOUT),
+        (TerminalOutcome.TIMED_OUT, FailureCategory.CANCELLED),
+        (TerminalOutcome.RESOURCE_EXHAUSTED, FailureCategory.INTERNAL),
+    ),
+)
+def test_execution_result_rejects_incoherent_failure_categories(
+    outcome: TerminalOutcome,
+    wrong_category: FailureCategory,
+) -> None:
+    request = make_request()
+    failure = FailureMetadata(wrong_category, "wrong_category", "Mismatched failure")
+
+    with pytest.raises(ValueError, match="results require"):
+        ExecutionResult(
+            execution_id=request.execution_id,
+            outcome=outcome,
+            limits=request.limits,
+            events_emitted=2,
+            failure=failure,
+        )
+
+
 async def test_executor_rejects_grants_outside_its_capabilities() -> None:
     executor = FakeCodingExecutor(
         capabilities=ExecutorCapabilities(streaming=True, cancellation=True, tool_names=frozenset())
