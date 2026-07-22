@@ -13,6 +13,7 @@ from gearmeshing_ai.application.ports.coding_executor import (
     CodingExecutor,
     EventKind,
     ExecutionArtifact,
+    ExecutionEvent,
     ExecutionRequest,
     ExecutionResult,
     ExecutorCapabilities,
@@ -73,6 +74,11 @@ def test_fake_satisfies_provider_neutral_protocol() -> None:
 
     assert executor.capabilities.streaming is True
     assert executor.capabilities.cancellation is True
+
+
+def test_execution_event_rejects_string_kind_at_runtime() -> None:
+    with pytest.raises(ValueError, match="kind must be an EventKind"):
+        ExecutionEvent(1, cast("EventKind", "started"), "Started")
 
 
 def test_repository_context_accepts_an_isolated_sibling_worktree() -> None:
