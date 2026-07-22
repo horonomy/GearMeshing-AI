@@ -333,3 +333,23 @@ def test_checkpoint_transitions_require_canonical_audit_events() -> None:
 
     with pytest.raises(WorkflowIntegrityError, match="canonical audit event"):
         runner.run(approved)
+
+
+def test_checkpoint_evidence_must_match_its_audit_prefix() -> None:
+    approved = _approved()
+    executing = approved.transition_to(
+        WorkRunState.EXECUTING,
+        actor_id="agent-assembly",
+        occurred_at=START + timedelta(seconds=1),
+    )
+    evidenced = executing.attach_artifact(
+        _artifact("implementation"),
+        actor_id="agent-assembly",
+        occurred_at=START + timedelta(seconds=2),
+    )
+    changed_artifact = replace(evidenced.artifacts[0], kind="unreviewed")
+    tampered = replace(evidenced, artifacts=(changed_artifact,))
+    runner, *_ = _runner(MemoryCheckpoints(tampered))
+
+    with pytest.raises(WorkflowIntegrityError, match="evidence does not match"):
+        runner.run(approved)
