@@ -128,3 +128,21 @@ def test_terminal_outcomes_cannot_be_restarted(terminal_state: WorkRunState) -> 
             actor_id="agent-assembly",
             occurred_at=NOW + timedelta(minutes=2),
         )
+
+
+def test_completion_without_a_draft_pr_is_rejected() -> None:
+    publishing = _advance(
+        _approved(),
+        WorkRunState.EXECUTING,
+        WorkRunState.VERIFYING,
+        WorkRunState.PUBLISHING_DRAFT_PR,
+    )
+
+    with pytest.raises(WorkRunValidationError, match="requires a Draft PR URL"):
+        publishing.transition_to(
+            WorkRunState.COMPLETED,
+            actor_id="agent-assembly",
+            occurred_at=NOW + timedelta(minutes=4),
+        )
+
+    assert publishing.state is WorkRunState.PUBLISHING_DRAFT_PR
