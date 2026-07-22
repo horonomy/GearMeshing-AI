@@ -277,6 +277,17 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             raise JiraResponseError(f"Jira returned invalid {context}")
         return value.strip()
 
+    @classmethod
+    def _timestamp(cls, value: object, context: str) -> datetime:
+        raw_value = cls._string(value, context)
+        try:
+            parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None or parsed.utcoffset() is None:
+                raise ValueError("timestamp is timezone-naive")
+        except ValueError as error:
+            raise JiraResponseError(f"Jira returned invalid {context}") from error
+        return parsed
+
     def _repository(self, properties: Mapping[str, object]) -> tuple[RepositoryReference, bool]:
         raw_repository = properties.get(_REPOSITORY_PROPERTY)
         if raw_repository is None:
@@ -433,17 +444,12 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                             "Jira idempotency key is already bound to a different operation or payload"
                         )
                 if matching_property is not None:
-                    created = self._string(comment.get("created"), "comment creation timestamp")
-                    try:
-                        accepted_at = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                    except ValueError as error:
-                        raise JiraResponseError("Jira returned invalid comment creation timestamp") from error
                     return OperationReceipt(
                         provider=self.name,
                         work_item_key=key,
                         idempotency_key=idempotency_key,
                         provider_reference=self._string(comment.get("id"), "comment ID"),
-                        accepted_at=accepted_at,
+                        accepted_at=self._timestamp(comment.get("created"), "comment creation timestamp"),
                     )
             total = payload.get("total")
             if not isinstance(total, int) or isinstance(total, bool) or start_at + len(comments) >= total:
@@ -487,17 +493,12 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             ),
             "created comment",
         )
-        created = self._string(payload.get("created"), "comment creation timestamp")
-        try:
-            accepted_at = datetime.fromisoformat(created.replace("Z", "+00:00"))
-        except ValueError as error:
-            raise JiraResponseError("Jira returned invalid comment creation timestamp") from error
         return OperationReceipt(
             provider=self.name,
             work_item_key=key,
             idempotency_key=idempotency_key,
             provider_reference=self._string(payload.get("id"), "comment ID"),
-            accepted_at=accepted_at,
+            accepted_at=self._timestamp(payload.get("created"), "comment creation timestamp"),
             metadata=Metadata({"operation_digest": operation_digest}),
         )
 
