@@ -172,3 +172,22 @@ async def test_executor_cancellation_is_idempotent_and_terminal() -> None:
     assert result.failure is not None
     assert result.failure.category is FailureCategory.CANCELLED
     assert result.failure.message == "Human authority checkpoint"
+
+
+def test_execution_result_rejects_artifacts_over_the_byte_limit() -> None:
+    request = make_request()
+    oversized = ExecutionArtifact(
+        relative_path="reports/result.json",
+        media_type="application/json",
+        content_sha256=ARTIFACT_DIGEST,
+        size_bytes=request.limits.max_artifact_bytes + 1,
+    )
+
+    with pytest.raises(ValueError, match="artifact bytes"):
+        ExecutionResult(
+            execution_id=request.execution_id,
+            outcome=TerminalOutcome.SUCCEEDED,
+            limits=request.limits,
+            events_emitted=2,
+            artifacts=(oversized,),
+        )
