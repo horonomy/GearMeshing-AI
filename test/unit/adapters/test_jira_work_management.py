@@ -216,6 +216,20 @@ async def test_jira_repository_property_cannot_override_approved_configuration()
         await adapter.get_work_item("GMAI-17")
 
 
+async def test_missing_configured_and_issue_repository_context_blocks_readiness() -> None:
+    adapter = provider(
+        lambda _: httpx.Response(200, json=issue_payload(include_repository=False)),
+        repository=None,
+    )
+
+    item = await adapter.get_work_item("GMAI-17")
+    readiness = await adapter.evaluate_readiness(item)
+
+    assert item.repository is None
+    assert item.metadata.values["repository_context_present"] is False
+    assert [problem.code for problem in readiness.problems] == ["missing-repository-context"]
+
+
 async def test_unsupported_issue_type_is_blocked() -> None:
     adapter = provider(lambda _: httpx.Response(200, json=issue_payload(issue_type="Epic")))
 
