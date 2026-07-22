@@ -113,3 +113,14 @@ def test_request_defensively_snapshots_metadata() -> None:
     assert request.metadata == {"attempt": 1}
     with pytest.raises(TypeError):
         request.metadata["attempt"] = 3  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    "unsafe_metadata",
+    ({"api_token": "redacted"}, {"password_hint": "redacted"}, {"valid": float("nan")}, {"valid": True}),
+)
+def test_request_rejects_credentials_and_unsafe_metadata_values(
+    unsafe_metadata: dict[str, str | int | float | None],
+) -> None:
+    with pytest.raises(ValueError):
+        make_request(metadata=unsafe_metadata)
