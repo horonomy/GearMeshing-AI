@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import math
 import re
-from hashlib import sha256
-from collections.abc import AsyncIterator, Iterable, Mapping
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from hashlib import sha256
 from pathlib import PurePosixPath
 from types import MappingProxyType
-from typing import Protocol, TypeAlias
+from typing import Protocol
 
-MetadataValue: TypeAlias = str | int | float | None
-FrozenMetadata: TypeAlias = Mapping[str, MetadataValue]
+type MetadataValue = str | int | float | None
+type FrozenMetadata = Mapping[str, MetadataValue]
 
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
