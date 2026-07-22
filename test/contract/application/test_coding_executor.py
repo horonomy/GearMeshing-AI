@@ -135,3 +135,24 @@ def test_approved_specification_rejects_content_digest_mismatch() -> None:
             content_sha256="0" * 64,
             approved_by="account-1",
         )
+
+
+async def test_executor_streams_ordered_events_and_returns_success() -> None:
+    executor = FakeCodingExecutor(
+        capabilities=make_capabilities(),
+        progress_messages=("Inspecting specification", "Running verification"),
+    )
+
+    session = await executor.start(make_request())
+    events = [event async for event in session.events()]
+    result = await session.result()
+
+    assert [event.sequence for event in events] == [1, 2, 3, 4]
+    assert [event.kind for event in events] == [
+        EventKind.STARTED,
+        EventKind.PROGRESS,
+        EventKind.PROGRESS,
+        EventKind.TERMINAL,
+    ]
+    assert result.outcome is TerminalOutcome.SUCCEEDED
+    assert result.events_emitted == len(events)
