@@ -44,3 +44,13 @@ def _advance(run: WorkRun, *states: WorkRunState) -> WorkRun:
             occurred_at=NOW + timedelta(minutes=offset),
         )
     return current
+
+
+def test_approval_creates_correlated_audit_evidence() -> None:
+    run = _approved()
+
+    assert run.state is WorkRunState.APPROVED
+    assert run.correlation.jira_issue_key == "GMAI-11"
+    assert run.correlation.repository_url == "https://github.com/horonomy/GearMeshing-AI"
+    assert run.events[0].name == "approved"
+    assert run.events[0].actor_id == "human-product-owner"
