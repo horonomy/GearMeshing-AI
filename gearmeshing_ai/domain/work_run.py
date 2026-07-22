@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from urllib.parse import urlsplit
@@ -120,6 +120,65 @@ class WorkRunEvent:
             _require_identifier(key, "event detail key")
             if not value.strip():
                 raise WorkRunValidationError("event detail values must not be blank")
+
+
+@dataclass(frozen=True, slots=True)
+class WorkRun:
+    """Immutable aggregate governing one approved engineering change."""
+
+    run_id: str
+    correlation: WorkRunCorrelation
+    state: WorkRunState
+    events: tuple[WorkRunEvent, ...]
+    artifacts: tuple[WorkRunArtifact, ...] = ()
+    draft_pr_url: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "run_id", _require_identifier(self.run_id, "run_id"))
+        if not self.events:
+            raise WorkRunValidationError("a work run must contain its approval event")
+        if self.events[0].sequence != 1 or self.events[0].state is not WorkRunState.APPROVED:
+            raise WorkRunValidationError("the first event must record approval")
+        if tuple(event.sequence for event in self.events) != tuple(range(1, len(self.events) + 1)):
+            raise WorkRunValidationError("event sequences must be contiguous")
+        if self.events[-1].state is not self.state:
+            raise WorkRunValidationError("the latest event state must match the work run state")
+        artifact_ids = [artifact.artifact_id for artifact in self.artifacts]
+        if len(artifact_ids) != len(set(artifact_ids)):
+            raise WorkRunValidationError("artifact IDs must be unique")
+        if self.draft_pr_url is not None:
+            object.__setattr__(
+                self,
+                "draft_pr_url",
+                _require_safe_url(self.draft_pr_url, "draft_pr_url", schemes=frozenset({"https"})),
+            )
+        if self.state is WorkRunState.COMPLETED and self.draft_pr_url is None:
+            raise WorkRunValidationError("a completed work run requires a Draft PR URL")
+
+    @classmethod
+    def approve(
+        cls,
+        *,
+        run_id: str,
+        correlation: WorkRunCorrelation,
+        actor_id: str,
+        occurred_at: datetime,
+    ) -> WorkRun:
+        """Create a work run at the explicit human approval checkpoint."""
+
+        event = WorkRunEvent(
+            sequence=1,
+            name="approved",
+            state=WorkRunState.APPROVED,
+            actor_id=actor_id,
+            occurred_at=occurred_at,
+        )
+        return cls(
+            run_id=run_id,
+            correlation=correlation,
+            state=WorkRunState.APPROVED,
+            events=(event,),
+        )
 
 
 class WorkRunState(StrEnum):
