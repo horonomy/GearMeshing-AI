@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import FrozenInstanceError
 
 import httpx
+import pytest
 
+from gearmeshing_ai.adapters.jira_errors import JiraConfigurationError
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import RepositoryReference
 
@@ -79,3 +82,15 @@ def issue_payload(
         },
         "properties": properties,
     }
+
+
+def test_configuration_is_immutable_bounded_and_credential_safe() -> None:
+    value = configuration()
+
+    assert "not-a-real-token" not in repr(value)
+    with pytest.raises(FrozenInstanceError):
+        value.site_url = "https://example.com"  # type: ignore[misc]
+    with pytest.raises(JiraConfigurationError):
+        configuration(site_url="https://example.com:not-a-port")
+    with pytest.raises(JiraConfigurationError):
+        configuration(retry_base_seconds=float("nan"))
