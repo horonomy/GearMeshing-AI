@@ -403,6 +403,11 @@ class WorkManagementProvider(ABC):
     async def _complete_work(self, update: CompletionUpdate) -> OperationReceipt:
         """Complete work after the base capability guard succeeds."""
 
-    @abstractmethod
     async def attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
         """Attach a reviewable artifact."""
+        self.require_capability(WorkManagementCapability.ATTACH_ARTIFACT)
+        return await self._attach_artifact(update)
+
+    @abstractmethod
+    async def _attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
+        """Attach an artifact after the base capability guard succeeds."""
