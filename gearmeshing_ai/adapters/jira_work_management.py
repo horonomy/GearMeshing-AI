@@ -464,6 +464,25 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             metadata=Metadata({"operation_hash": hashlib.sha256(idempotency_key.encode()).hexdigest()}),
         )
 
+    async def publish_readiness(self, result: ReadinessResult, idempotency_key: str) -> OperationReceipt:
+        """Post the normalized validation decision without exposing hidden reasoning."""
+        if result.ready:
+            return await self._publish_comment(
+                WorkManagementCapability.UPDATE_PROGRESS,
+                result.work_item_key,
+                idempotency_key,
+                "GearMeshing-AI specification validation passed.",
+            )
+        diagnostics = "\n".join(
+            f"- [{problem.code}] {problem.summary}: {problem.details}" for problem in result.problems
+        )
+        return await self._publish_comment(
+            WorkManagementCapability.REPORT_BLOCKER,
+            result.work_item_key,
+            idempotency_key,
+            f"GearMeshing-AI specification validation blocked:\n{diagnostics}",
+        )
+
     async def update_progress(self, update: ProgressUpdate) -> OperationReceipt:
         return await self._publish_comment(
             WorkManagementCapability.UPDATE_PROGRESS,
