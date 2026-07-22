@@ -303,7 +303,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         parsed_description = parse_adf(description_value) if description_value is not None else None
         description_present = parsed_description is not None and bool(parsed_description.text)
         description = (
-            parsed_description.text
+            " ".join(parsed_description.text.splitlines())
             if description_present and parsed_description is not None
             else "[Missing Jira description]"
         )
