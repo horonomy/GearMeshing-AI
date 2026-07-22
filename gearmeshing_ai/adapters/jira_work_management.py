@@ -306,6 +306,14 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             ),
             "issue",
         )
+        try:
+            return self._normalize_work_item(key, payload)
+        except JiraResponseError:
+            raise
+        except (TypeError, ValueError) as error:
+            raise JiraResponseError("Jira issue payload cannot be normalized safely") from error
+
+    def _normalize_work_item(self, key: str, payload: Mapping[str, object]) -> WorkItem:
         response_key = self._string(payload.get("key"), "issue key")
         if response_key != key:
             raise JiraResponseError("Jira returned an issue key that does not match the request")
