@@ -156,3 +156,19 @@ async def test_executor_streams_ordered_events_and_returns_success() -> None:
     ]
     assert result.outcome is TerminalOutcome.SUCCEEDED
     assert result.events_emitted == len(events)
+
+
+async def test_executor_cancellation_is_idempotent_and_terminal() -> None:
+    executor = FakeCodingExecutor(capabilities=make_capabilities(), progress_messages=("Unused work",))
+    session = await executor.start(make_request())
+
+    await session.cancel("Human authority checkpoint")
+    await session.cancel("A later reason must not replace the first")
+    events = [event async for event in session.events()]
+    result = await session.result()
+
+    assert [event.kind for event in events] == [EventKind.STARTED, EventKind.TERMINAL]
+    assert result.outcome is TerminalOutcome.CANCELLED
+    assert result.failure is not None
+    assert result.failure.category is FailureCategory.CANCELLED
+    assert result.failure.message == "Human authority checkpoint"
