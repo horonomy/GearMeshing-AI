@@ -27,6 +27,10 @@ class JiraRateLimitError(JiraAdapterError):
     """Raised after the bounded rate-limit retry budget is exhausted."""
 
 
+class JiraIdempotencyConflictError(JiraAdapterError):
+    """Raised when an idempotency key is reused for a different operation."""
+
+
 class JiraResponseError(JiraAdapterError):
     """Raised for malformed, oversized, or unsuccessful Jira responses."""
 
