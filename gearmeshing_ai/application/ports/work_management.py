@@ -9,12 +9,10 @@ from datetime import datetime
 from enum import StrEnum
 from math import isfinite
 from types import MappingProxyType
-from typing import TypeAlias
 from urllib.parse import urlsplit
 
-
-MetadataScalar: TypeAlias = str | int | float | bool | None
-MetadataValue: TypeAlias = MetadataScalar | tuple["MetadataValue", ...] | Mapping[str, "MetadataValue"]
+type MetadataScalar = str | int | float | bool | None
+type MetadataValue = MetadataScalar | tuple[MetadataValue, ...] | Mapping[str, MetadataValue]
 
 _SENSITIVE_METADATA_KEYS = frozenset(
     {
