@@ -151,6 +151,9 @@ def test_repository_reference_is_an_immutable_horonomy_identity() -> None:
         "https://token@github.com/horonomy/GearMeshing-AI",
         "https://github.com/horonomy/GearMeshing-AI?token=value",
         "https://github.com/horonomy/GearMeshing-AI#secret",
+        "https://github.com:bad/horonomy/GearMeshing-AI",
+        "https://./horonomy/GearMeshing-AI",
+        "https://github.com/horonomy/Gear Meshing-AI",
         "/horonomy/GearMeshing-AI",
     ],
 )
