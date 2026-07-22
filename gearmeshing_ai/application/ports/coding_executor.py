@@ -171,6 +171,26 @@ class EventKind(StrEnum):
     TERMINAL = "terminal"
 
 
+_OUTCOME_FAILURE_CATEGORIES: Mapping[TerminalOutcome, frozenset[FailureCategory]] = MappingProxyType(
+    {
+        TerminalOutcome.COMPLETED: frozenset(),
+        TerminalOutcome.BLOCKED: frozenset({FailureCategory.POLICY}),
+        TerminalOutcome.FAILED: frozenset(
+            {
+                FailureCategory.INVALID_REQUEST,
+                FailureCategory.PROVIDER,
+                FailureCategory.TOOL,
+                FailureCategory.VERIFICATION,
+                FailureCategory.INTERNAL,
+            }
+        ),
+        TerminalOutcome.CANCELLED: frozenset({FailureCategory.CANCELLED}),
+        TerminalOutcome.TIMED_OUT: frozenset({FailureCategory.TIMEOUT}),
+        TerminalOutcome.RESOURCE_EXHAUSTED: frozenset({FailureCategory.RESOURCE}),
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class RepositoryContext:
     """Repository and isolated worktree locations for one execution."""
@@ -375,7 +395,13 @@ class ExecutionArtifact:
 
 @dataclass(frozen=True, slots=True)
 class ExecutionResult:
-    """Validated terminal result constrained by the request's limits."""
+    """Validated terminal result constrained by the request's limits.
+
+    Failure categories are explicit: blocked=policy; cancelled=cancelled;
+    timed_out=timeout; resource_exhausted=resource; failed accepts only invalid
+    request, provider, tool, verification, or internal failures. Completed has no
+    failure.
+    """
 
     execution_id: str
     outcome: TerminalOutcome
@@ -397,18 +423,10 @@ class ExecutionResult:
             raise ValueError("completed results must not include a failure")
         if self.outcome is not TerminalOutcome.COMPLETED and self.failure is None:
             raise ValueError("non-success results must include a failure")
-        required_categories = {
-            TerminalOutcome.CANCELLED: FailureCategory.CANCELLED,
-            TerminalOutcome.TIMED_OUT: FailureCategory.TIMEOUT,
-            TerminalOutcome.RESOURCE_EXHAUSTED: FailureCategory.RESOURCE,
-        }
-        required_category = required_categories.get(self.outcome)
-        if (
-            required_category is not None
-            and self.failure is not None
-            and self.failure.category is not required_category
-        ):
-            raise ValueError(f"{self.outcome.value} results require a {required_category.value} failure")
+        allowed_categories = _OUTCOME_FAILURE_CATEGORIES[self.outcome]
+        if self.failure is not None and self.failure.category not in allowed_categories:
+            allowed = ", ".join(category.value for category in sorted(allowed_categories, key=str))
+            raise ValueError(f"{self.outcome.value} results require one of these failure categories: {allowed}")
         object.__setattr__(self, "execution_id", _identifier(self.execution_id, "execution_id"))
         object.__setattr__(self, "events_emitted", events_emitted)
         object.__setattr__(self, "artifacts", artifacts)
