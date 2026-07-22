@@ -178,3 +178,14 @@ def test_readiness_is_derived_from_immutable_problems() -> None:
     assert blocked.ready is False
     assert blocked.problems[0].code == "missing-approval"
     assert ReadinessResult(work_item_key="GMAI-16").ready is True
+
+
+@pytest.mark.parametrize("percent", [-1, 101, True, 1.5])
+def test_progress_updates_reject_invalid_percentages(percent: object) -> None:
+    with pytest.raises(ValueError, match="percent_complete"):
+        ProgressUpdate(
+            work_item_key="GMAI-16",
+            idempotency_key="run-1:progress:50",
+            summary="Implementing contract",
+            percent_complete=percent,  # type: ignore[arg-type]
+        )
