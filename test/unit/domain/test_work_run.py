@@ -1,6 +1,6 @@
 """Tests for the governed WorkRun aggregate."""
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -178,6 +178,21 @@ def test_completion_without_a_draft_pr_is_rejected() -> None:
         )
 
     assert publishing.state is WorkRunState.PUBLISHING_DRAFT_PR
+
+
+def test_rehydration_rejects_a_draft_pr_url_without_its_audit_event() -> None:
+    publishing = _advance(
+        _approved(),
+        WorkRunState.EXECUTING,
+        WorkRunState.VERIFYING,
+        WorkRunState.PUBLISHING_DRAFT_PR,
+    )
+
+    with pytest.raises(WorkRunValidationError, match="publishing audit event"):
+        replace(
+            publishing,
+            draft_pr_url="https://github.com/horonomy/GearMeshing-AI/pull/2",
+        )
 
 
 @pytest.mark.parametrize(
