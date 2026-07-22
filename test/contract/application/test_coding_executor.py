@@ -193,6 +193,25 @@ async def test_executor_streams_typed_artifact_before_matching_result() -> None:
     assert result.artifacts == (artifact,)
 
 
+async def test_executor_reports_resource_exhaustion_without_exceeding_event_limit() -> None:
+    executor = FakeCodingExecutor(
+        capabilities=make_capabilities(),
+        progress_messages=("first", "second", "third"),
+    )
+    session = await executor.start(make_request(max_events=3))
+
+    events = [event async for event in session.events()]
+    result = await session.result()
+
+    assert len(events) == 2
+    assert len(events) <= result.limits.max_events
+    assert [event.kind for event in events] == [EventKind.STARTED, EventKind.TERMINAL]
+    assert events[-1].metadata["outcome"] == TerminalOutcome.RESOURCE_EXHAUSTED.value
+    assert result.outcome is TerminalOutcome.RESOURCE_EXHAUSTED
+    assert result.failure is not None
+    assert result.failure.category is FailureCategory.RESOURCE
+
+
 async def test_executor_cancellation_is_idempotent_and_terminal() -> None:
     executor = FakeCodingExecutor(capabilities=make_capabilities(), progress_messages=("Unused work",))
     session = await executor.start(make_request())
