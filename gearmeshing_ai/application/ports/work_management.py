@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from math import isfinite
 from types import MappingProxyType
@@ -286,6 +287,32 @@ class ArtifactUpdate:
         object.__setattr__(self, "name", _required_text(self.name, "name"))
         object.__setattr__(self, "kind", _required_text(self.kind, "kind"))
         object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
+        if not isinstance(self.metadata, Metadata):
+            raise TypeError("metadata must be Metadata")
+
+
+@dataclass(frozen=True, slots=True)
+class OperationReceipt:
+    """Provider acknowledgement for an idempotent write operation."""
+
+    provider: str
+    work_item_key: str
+    idempotency_key: str
+    provider_reference: str
+    accepted_at: datetime
+    metadata: Metadata = Metadata()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "provider", _required_text(self.provider, "provider"))
+        object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
+        object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
+        object.__setattr__(
+            self,
+            "provider_reference",
+            _required_text(self.provider_reference, "provider_reference"),
+        )
+        if self.accepted_at.tzinfo is None or self.accepted_at.utcoffset() is None:
+            raise ValueError("accepted_at must be timezone-aware")
         if not isinstance(self.metadata, Metadata):
             raise TypeError("metadata must be Metadata")
 
