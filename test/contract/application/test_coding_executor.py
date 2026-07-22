@@ -20,7 +20,7 @@ from gearmeshing_ai.application.ports.coding_executor import (
     TerminalOutcome,
     ToolGrant,
 )
-from test.contract.application.fake_coding_executor import FakeCodingExecutor, assert_executor_contract
+from fake_coding_executor import FakeCodingExecutor, assert_executor_contract
 
 SPECIFICATION_CONTENT = "Implement the approved behavior and its verification."
 SPECIFICATION_DIGEST = sha256(SPECIFICATION_CONTENT.encode()).hexdigest()
@@ -110,7 +110,7 @@ def test_request_defensively_snapshots_metadata() -> None:
 
     assert request.metadata == {"attempt": 1}
     with pytest.raises(TypeError):
-        request.metadata["attempt"] = 3  # type: ignore[index]
+        request.metadata["attempt"] = 3
 
 
 @pytest.mark.parametrize(

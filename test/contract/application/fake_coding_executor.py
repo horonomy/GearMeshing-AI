@@ -102,6 +102,7 @@ class FakeExecutionSession:
         return tuple(events)
 
     def _build_result(self, events_emitted: int) -> ExecutionResult:
+        failure: FailureMetadata | None
         if self._cancel_reason is not None:
             failure = FailureMetadata(
                 FailureCategory.CANCELLED,
