@@ -17,6 +17,8 @@ from gearmeshing_ai.adapters.jira_errors import (
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import (
     ProgressUpdate,
+    ReadinessProblem,
+    ReadinessResult,
     RepositoryReference,
     UnsupportedCapabilityError,
 )
@@ -323,3 +325,30 @@ async def test_new_progress_write_posts_adf_with_an_idempotency_property() -> No
         {"key": "gearmeshing-ai.idempotency-key", "value": "run-1:progress:75"}
     ]
     assert "not-a-real-token" not in json.dumps(posted)
+
+
+async def test_blocked_readiness_result_can_be_posted_to_jira() -> None:
+    posted: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"comments": [], "total": 0})
+        posted.update(json.loads(request.content))
+        return httpx.Response(201, json={"id": "10003", "created": "2026-07-22T05:02:00Z"})
+
+    readiness = ReadinessResult(
+        work_item_key="GMAI-17",
+        problems=(
+            ReadinessProblem(
+                code="missing-acceptance-criteria",
+                summary="Add acceptance criteria",
+                details="Add a non-empty Acceptance Criteria section to the Jira description.",
+            ),
+        ),
+    )
+
+    await provider(handler, allow_writes=True).publish_readiness(readiness, "run-1:readiness")
+
+    serialized = json.dumps(posted)
+    assert "missing-acceptance-criteria" in serialized
+    assert "Add acceptance criteria" in serialized
