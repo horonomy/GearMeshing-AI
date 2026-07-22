@@ -95,6 +95,7 @@ class TerminalOutcome(StrEnum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
+    RESOURCE_EXHAUSTED = "resource_exhausted"
 
 
 class FailureCategory(StrEnum):
@@ -215,6 +216,8 @@ class ResourceLimits:
             _finite_positive_float(self.wall_clock_seconds, "wall_clock_seconds"),
         )
         object.__setattr__(self, "max_events", _positive_int(self.max_events, "max_events"))
+        if self.max_events < 2:
+            raise ValueError("max_events must reserve STARTED and TERMINAL events")
         object.__setattr__(self, "max_artifacts", _positive_int(self.max_artifacts, "max_artifacts"))
         object.__setattr__(
             self,
