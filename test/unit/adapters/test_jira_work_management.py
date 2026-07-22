@@ -352,3 +352,10 @@ async def test_blocked_readiness_result_can_be_posted_to_jira() -> None:
     serialized = json.dumps(posted)
     assert "missing-acceptance-criteria" in serialized
     assert "Add acceptance criteria" in serialized
+
+
+async def test_non_finite_json_response_is_rejected() -> None:
+    adapter = provider(lambda _: httpx.Response(200, content=b'{"unsafe": NaN}'))
+
+    with pytest.raises(JiraResponseError, match="invalid JSON"):
+        await adapter.get_work_item("GMAI-17")
