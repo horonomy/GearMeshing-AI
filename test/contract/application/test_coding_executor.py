@@ -79,7 +79,7 @@ def test_repository_context_accepts_an_isolated_sibling_worktree() -> None:
     assert repository.worktree_root == "/workspace/.worktrees/GMAI-20"
 
 
-@pytest.mark.parametrize("unsafe_path", ("/etc/passwd", "../secret", "src/../../secret"))
+@pytest.mark.parametrize("unsafe_path", (".", "/etc/passwd", "../secret", "src/../../secret"))
 def test_repository_context_rejects_unsafe_writable_paths(unsafe_path: str) -> None:
     with pytest.raises(ValueError, match="relative POSIX path"):
         RepositoryContext(
