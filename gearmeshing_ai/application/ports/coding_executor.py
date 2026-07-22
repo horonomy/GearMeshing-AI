@@ -108,11 +108,7 @@ def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
         parts = frozenset(key.split("_"))
         key_bearing_secret = "key" in parts and bool(parts & {"access", "api", "private"})
         collapsed_key = key.replace("_", "")
-        if (
-            parts & _SENSITIVE_KEY_PARTS
-            or key_bearing_secret
-            or collapsed_key in {"accesskey", "apikey", "privatekey"}
-        ):
+        if parts & _SENSITIVE_KEY_PARTS or key_bearing_secret or collapsed_key in {"accesskey", "apikey", "privatekey"}:
             raise ValueError(f"metadata key {key_text!r} may contain credentials")
         if key in snapshot:
             raise ValueError(f"metadata keys normalize to duplicate {key!r}")
@@ -397,7 +393,11 @@ class ExecutionResult:
             TerminalOutcome.RESOURCE_EXHAUSTED: FailureCategory.RESOURCE,
         }
         required_category = required_categories.get(self.outcome)
-        if required_category is not None and self.failure is not None and self.failure.category is not required_category:
+        if (
+            required_category is not None
+            and self.failure is not None
+            and self.failure.category is not required_category
+        ):
             raise ValueError(f"{self.outcome.value} results require a {required_category.value} failure")
         object.__setattr__(self, "execution_id", _identifier(self.execution_id, "execution_id"))
         object.__setattr__(self, "events_emitted", events_emitted)
