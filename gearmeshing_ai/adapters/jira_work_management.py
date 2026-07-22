@@ -22,6 +22,7 @@ from gearmeshing_ai.adapters.jira_errors import (
     JiraAuthenticationError,
     JiraAuthorizationError,
     JiraConfigurationError,
+    JiraIdempotencyConflictError,
     JiraNotFoundError,
     JiraRateLimitError,
     JiraResponseError,
@@ -392,7 +393,12 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             )
         return ReadinessResult(work_item_key=work_item.key, problems=tuple(problems))
 
-    async def _find_comment(self, key: str, idempotency_key: str) -> OperationReceipt | None:
+    async def _find_comment(
+        self,
+        key: str,
+        idempotency_key: str,
+        operation_binding: Mapping[str, JsonValue],
+    ) -> OperationReceipt | None:
         start_at = 0
         for _ in range(10):
             payload = self._object(
@@ -411,12 +417,22 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                 properties = comment.get("properties", [])
                 if not isinstance(properties, list):
                     raise JiraResponseError("Jira returned invalid comment properties")
-                if any(
-                    isinstance(prop, Mapping)
-                    and prop.get("key") == _IDEMPOTENCY_PROPERTY
-                    and prop.get("value") == idempotency_key
-                    for prop in properties
-                ):
+                matching_property: Mapping[object, object] | None = None
+                for prop in properties:
+                    if not isinstance(prop, Mapping) or prop.get("key") != _IDEMPOTENCY_PROPERTY:
+                        continue
+                    property_value = prop.get("value")
+                    if property_value == operation_binding:
+                        matching_property = prop
+                        break
+                    if property_value == idempotency_key or (
+                        isinstance(property_value, Mapping)
+                        and property_value.get("idempotencyKey") == idempotency_key
+                    ):
+                        raise JiraIdempotencyConflictError(
+                            "Jira idempotency key is already bound to a different operation or payload"
+                        )
+                if matching_property is not None:
                     created = self._string(comment.get("created"), "comment creation timestamp")
                     try:
                         accepted_at = datetime.fromisoformat(created.replace("Z", "+00:00"))
@@ -444,9 +460,20 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         idempotency_key: str,
         text: str,
     ) -> OperationReceipt:
+        """Deduplicate retries before Jira's non-atomic comment creation boundary.
+
+        Jira REST v3 provides no conditional transaction spanning the comment
+        lookup and create calls. Callers must serialize concurrent first writes
+        that share an idempotency key; ordinary retries are deduplicated here.
+        """
         self.require_capability(capability)
         key = self._validated_issue_key(work_item_key)
-        existing = await self._find_comment(key, idempotency_key)
+        operation_digest = hashlib.sha256(f"{capability.value}\0{text}".encode()).hexdigest()
+        operation_binding: dict[str, JsonValue] = {
+            "idempotencyKey": idempotency_key,
+            "operationDigest": operation_digest,
+        }
+        existing = await self._find_comment(key, idempotency_key, operation_binding)
         if existing is not None:
             return existing
         payload = self._object(
@@ -455,7 +482,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                 f"/rest/api/3/issue/{quote(key, safe='')}/comment",
                 body={
                     "body": paragraph_document(text),
-                    "properties": [{"key": _IDEMPOTENCY_PROPERTY, "value": idempotency_key}],
+                    "properties": [{"key": _IDEMPOTENCY_PROPERTY, "value": operation_binding}],
                 },
             ),
             "created comment",
@@ -471,7 +498,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             idempotency_key=idempotency_key,
             provider_reference=self._string(payload.get("id"), "comment ID"),
             accepted_at=accepted_at,
-            metadata=Metadata({"operation_hash": hashlib.sha256(idempotency_key.encode()).hexdigest()}),
+            metadata=Metadata({"operation_digest": operation_digest}),
         )
 
     async def publish_readiness(self, result: ReadinessResult, idempotency_key: str) -> OperationReceipt:
