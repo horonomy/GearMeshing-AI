@@ -80,6 +80,17 @@ def _site_url(value: str) -> str:
     return normalized
 
 
+def _idempotency_key(value: str) -> str:
+    if not isinstance(value, str):
+        raise JiraWriteValidationError("idempotency_key must be a string")
+    normalized = value.strip()
+    if not normalized or len(normalized) > 256:
+        raise JiraWriteValidationError("idempotency_key must contain 1 through 256 characters")
+    if any(category(character).startswith("C") for character in normalized):
+        raise JiraWriteValidationError("idempotency_key must not contain control characters")
+    return normalized
+
+
 @dataclass(frozen=True, slots=True)
 class JiraConfiguration:
     """Immutable Jira connection and bounded retry policy."""
@@ -484,6 +495,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         """
         self.require_capability(capability)
         key = self._validated_issue_key(work_item_key)
+        idempotency_key = _idempotency_key(idempotency_key)
         try:
             comment_document = paragraph_document(text)
         except ValueError as error:
