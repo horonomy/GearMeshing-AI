@@ -76,7 +76,13 @@ def _relative_path(value: str, name: str) -> str:
 def _absolute_path(value: str, name: str) -> str:
     normalized = _required_text(value, name, maximum=1024)
     path = PurePosixPath(normalized)
-    if not path.is_absolute() or normalized != path.as_posix() or ".." in path.parts or path == PurePosixPath("/"):
+    if (
+        not path.is_absolute()
+        or normalized.startswith("//")
+        or normalized != path.as_posix()
+        or ".." in path.parts
+        or path == PurePosixPath("/")
+    ):
         raise ValueError(f"{name} must be a normalized absolute POSIX path")
     return normalized
 
