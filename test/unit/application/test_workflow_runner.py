@@ -153,6 +153,17 @@ def test_checkpoint_must_belong_to_the_requested_run() -> None:
         runner.run(approved)
 
 
+def test_ingest_persists_the_approved_input_as_the_first_checkpoint() -> None:
+    approved = _approved()
+    checkpoints = MemoryCheckpoints()
+    runner, *_ = _runner(checkpoints)
+
+    runner.run(approved)
+
+    assert checkpoints.saved[0] is approved
+    assert checkpoints.saved[0].state is WorkRunState.APPROVED
+
+
 def test_runner_completes_deterministic_governed_stages() -> None:
     approved = _approved()
     checkpoints = MemoryCheckpoints()
