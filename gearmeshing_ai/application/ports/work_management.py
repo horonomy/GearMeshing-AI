@@ -200,6 +200,30 @@ class ReadinessResult:
         return not self.problems
 
 
+@dataclass(frozen=True, slots=True)
+class ProgressUpdate:
+    """Idempotent request to publish execution progress."""
+
+    work_item_key: str
+    idempotency_key: str
+    summary: str
+    percent_complete: int
+    metadata: Metadata = Metadata()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
+        object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
+        object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
+        if (
+            isinstance(self.percent_complete, bool)
+            or not isinstance(self.percent_complete, int)
+            or not 0 <= self.percent_complete <= 100
+        ):
+            raise ValueError("percent_complete must be an integer from 0 through 100")
+        if not isinstance(self.metadata, Metadata):
+            raise TypeError("metadata must be Metadata")
+
+
 class WorkManagementProvider(ABC):
     """Boundary implemented by external work-management adapters."""
 
