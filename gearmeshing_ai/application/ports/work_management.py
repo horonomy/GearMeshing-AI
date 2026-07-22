@@ -114,7 +114,10 @@ class ProviderCapabilities:
     values: frozenset[WorkManagementCapability]
 
     def __init__(self, values: frozenset[WorkManagementCapability] | set[WorkManagementCapability]) -> None:
-        object.__setattr__(self, "values", frozenset(values))
+        frozen = frozenset(values)
+        if not all(isinstance(value, WorkManagementCapability) for value in frozen):
+            raise TypeError("values must contain only WorkManagementCapability members")
+        object.__setattr__(self, "values", frozen)
 
     def supports(self, capability: WorkManagementCapability) -> bool:
         return capability in self.values
