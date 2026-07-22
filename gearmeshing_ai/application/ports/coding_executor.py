@@ -306,3 +306,32 @@ class ExecutionArtifact:
         object.__setattr__(self, "media_type", _required_text(self.media_type, "media_type", maximum=128))
         object.__setattr__(self, "content_sha256", digest)
         object.__setattr__(self, "size_bytes", _positive_int(self.size_bytes, "size_bytes"))
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionResult:
+    """Validated terminal result constrained by the request's limits."""
+
+    execution_id: str
+    outcome: TerminalOutcome
+    limits: ResourceLimits
+    events_emitted: int
+    artifacts: tuple[ExecutionArtifact, ...] = ()
+    failure: FailureMetadata | None = None
+
+    def __post_init__(self) -> None:
+        artifacts = tuple(self.artifacts)
+        events_emitted = _positive_int(self.events_emitted, "events_emitted")
+        if events_emitted > self.limits.max_events:
+            raise ValueError("events_emitted exceeds max_events")
+        if len(artifacts) > self.limits.max_artifacts:
+            raise ValueError("artifacts exceeds max_artifacts")
+        if sum(artifact.size_bytes for artifact in artifacts) > self.limits.max_artifact_bytes:
+            raise ValueError("artifact bytes exceeds max_artifact_bytes")
+        if self.outcome is TerminalOutcome.SUCCEEDED and self.failure is not None:
+            raise ValueError("successful results must not include a failure")
+        if self.outcome is not TerminalOutcome.SUCCEEDED and self.failure is None:
+            raise ValueError("non-success results must include a failure")
+        object.__setattr__(self, "execution_id", _identifier(self.execution_id, "execution_id"))
+        object.__setattr__(self, "events_emitted", events_emitted)
+        object.__setattr__(self, "artifacts", artifacts)
