@@ -129,6 +129,17 @@ def test_repository_reference_rejects_unsafe_urls(web_url: str) -> None:
         RepositoryReference(provider="github", owner="horonomy", name="GearMeshing-AI", web_url=web_url)
 
 
+@pytest.mark.parametrize("provider", ["git\nhub", "x" * 257])
+def test_required_identifiers_reject_control_characters_and_unbounded_values(provider: str) -> None:
+    with pytest.raises(ValueError):
+        RepositoryReference(
+            provider=provider,
+            owner="horonomy",
+            name="GearMeshing-AI",
+            web_url="https://github.com/horonomy/GearMeshing-AI",
+        )
+
+
 def test_metadata_is_recursively_copied_and_frozen() -> None:
     nested = {"labels": ["mvp-1"], "context": {"attempt": 1}}
     metadata = Metadata(nested)
