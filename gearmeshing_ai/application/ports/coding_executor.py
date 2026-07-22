@@ -287,3 +287,22 @@ class FailureMetadata:
         object.__setattr__(self, "code", _identifier(self.code, "failure code"))
         object.__setattr__(self, "message", _required_text(self.message, "failure message", maximum=2048))
         object.__setattr__(self, "details", _frozen_metadata(self.details))
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionArtifact:
+    """Bounded artifact produced inside the isolated worktree."""
+
+    relative_path: str
+    media_type: str
+    content_sha256: str
+    size_bytes: int
+
+    def __post_init__(self) -> None:
+        digest = self.content_sha256.strip().lower()
+        if _SHA256_PATTERN.fullmatch(digest) is None:
+            raise ValueError("content_sha256 must be a lowercase SHA-256 digest")
+        object.__setattr__(self, "relative_path", _relative_path(self.relative_path, "artifact path"))
+        object.__setattr__(self, "media_type", _required_text(self.media_type, "media_type", maximum=128))
+        object.__setattr__(self, "content_sha256", digest)
+        object.__setattr__(self, "size_bytes", _positive_int(self.size_bytes, "size_bytes"))
