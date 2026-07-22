@@ -370,6 +370,32 @@ def test_checkpoint_evidence_must_match_its_audit_prefix() -> None:
         runner.run(approved)
 
 
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        {"uri": "https://attacker.invalid/replaced"},
+        {"sha256": "b" * 64},
+    ],
+)
+def test_checkpoint_rejects_replaced_artifact_integrity(replacement: dict[str, str]) -> None:
+    approved = _approved()
+    executing = approved.transition_to(
+        WorkRunState.EXECUTING,
+        actor_id="agent-assembly",
+        occurred_at=START + timedelta(seconds=1),
+    )
+    evidenced = executing.attach_artifact(
+        _artifact("implementation"),
+        actor_id="agent-assembly",
+        occurred_at=START + timedelta(seconds=2),
+    )
+    tampered = replace(evidenced, artifacts=(replace(evidenced.artifacts[0], **replacement),))
+    runner, *_ = _runner(MemoryCheckpoints(tampered))
+
+    with pytest.raises(WorkflowIntegrityError, match="evidence does not match"):
+        runner.run(approved)
+
+
 def test_remediation_cycles_stop_at_the_configured_limit() -> None:
     checkpoints = MemoryCheckpoints()
     verifier = FakeVerifier([VerificationResult(passed=False) for _ in range(4)])
