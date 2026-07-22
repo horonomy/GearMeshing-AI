@@ -174,6 +174,11 @@ def test_runner_completes_deterministic_governed_stages() -> None:
     assert checkpoints.current == completed
 
 
+def test_verification_results_require_a_strict_boolean_decision() -> None:
+    with pytest.raises(TypeError, match="passed must be a boolean"):
+        VerificationResult(passed="false")  # type: ignore[arg-type]
+
+
 def test_replaying_an_approved_run_does_not_repeat_side_effects() -> None:
     approved = _approved()
     checkpoints = MemoryCheckpoints()
