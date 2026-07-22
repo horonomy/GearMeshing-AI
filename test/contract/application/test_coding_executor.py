@@ -103,6 +103,17 @@ def test_repository_context_rejects_ambiguous_absolute_roots(unsafe_root: str) -
         )
 
 
+@pytest.mark.parametrize("unsafe_ref", ("feature//name", "feature/../main", "feature@{one", "-danger"))
+def test_repository_context_rejects_unsafe_git_refs(unsafe_ref: str) -> None:
+    with pytest.raises(ValueError, match="normalized Git ref"):
+        RepositoryContext(
+            repository_root="/workspace/GearMeshing-AI",
+            worktree_root="/workspace/.worktrees/GMAI-20",
+            base_ref="main",
+            branch=unsafe_ref,
+        )
+
+
 @pytest.mark.parametrize("unsafe_command", ("/bin/sh", "pytest;curl", "../ruff", "git status"))
 def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
     with pytest.raises(ValueError, match="without paths or shell syntax"):
