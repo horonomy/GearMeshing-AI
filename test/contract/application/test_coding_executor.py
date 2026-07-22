@@ -175,6 +175,19 @@ async def test_executor_streams_ordered_events_and_returns_success() -> None:
     assert result.events_emitted == len(events)
 
 
+async def test_executor_streams_typed_artifact_before_matching_result() -> None:
+    artifact = ExecutionArtifact("reports/result.json", "application/json", ARTIFACT_DIGEST, 5)
+    executor = FakeCodingExecutor(capabilities=make_capabilities(), artifacts=(artifact,))
+
+    session = await executor.start(make_request())
+    events = [event async for event in session.events()]
+    result = await session.result()
+
+    assert [event.kind for event in events] == [EventKind.STARTED, EventKind.ARTIFACT, EventKind.TERMINAL]
+    assert events[1].artifact is artifact
+    assert result.artifacts == (artifact,)
+
+
 async def test_executor_cancellation_is_idempotent_and_terminal() -> None:
     executor = FakeCodingExecutor(capabilities=make_capabilities(), progress_messages=("Unused work",))
     session = await executor.start(make_request())
