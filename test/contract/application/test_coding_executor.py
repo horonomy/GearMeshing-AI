@@ -168,6 +168,11 @@ def test_request_canonicalizes_metadata_keys() -> None:
     assert request.metadata == {"request_id": "request-1", "retry_count": 2}
 
 
+def test_request_rejects_duplicate_canonical_metadata_keys() -> None:
+    with pytest.raises(ValueError, match="normalize to duplicate"):
+        make_request(metadata={"Request-ID": "first", "request_id": "second"})
+
+
 @pytest.mark.parametrize(
     "unsafe_metadata",
     ({"api_token": "redacted"}, {"password_hint": "redacted"}, {"valid": float("nan")}, {"valid": True}),
