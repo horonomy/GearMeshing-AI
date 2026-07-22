@@ -172,3 +172,19 @@ def test_runner_completes_deterministic_governed_stages() -> None:
     assert remediator.requests == []
     assert publisher.requests[0].idempotency_key == "work-run-13:draft_pr_publication:1"
     assert checkpoints.current == completed
+
+
+def test_replaying_an_approved_run_does_not_repeat_side_effects() -> None:
+    approved = _approved()
+    checkpoints = MemoryCheckpoints()
+    runner, executor, verifier, _, publisher = _runner(checkpoints)
+
+    first_result = runner.run(approved)
+    save_count = len(checkpoints.saved)
+    second_result = runner.run(approved)
+
+    assert second_result == first_result
+    assert len(executor.requests) == 1
+    assert len(verifier.requests) == 1
+    assert len(publisher.requests) == 1
+    assert len(checkpoints.saved) == save_count
