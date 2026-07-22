@@ -240,7 +240,12 @@ def test_attaching_artifact_preserves_the_previous_aggregate() -> None:
 
     assert executing.artifacts == ()
     assert updated.artifacts == (artifact,)
-    assert updated.events[-1].details == (("artifact_id", "test-report"), ("kind", "verification"))
+    assert updated.events[-1].details == (
+        ("artifact_id", "test-report"),
+        ("kind", "verification"),
+        ("uri", "artifact://work-run-11/test-report"),
+        ("sha256", "a" * 64),
+    )
 
 
 @pytest.mark.parametrize(
