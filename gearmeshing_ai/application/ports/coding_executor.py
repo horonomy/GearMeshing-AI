@@ -185,3 +185,27 @@ class ToolGrant:
         object.__setattr__(self, "tool", _identifier(self.tool, "tool"))
         object.__setattr__(self, "operations", operations)
         object.__setattr__(self, "commands", commands)
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceLimits:
+    """Finite upper bounds that every provider must enforce."""
+
+    wall_clock_seconds: float
+    max_events: int
+    max_artifacts: int
+    max_artifact_bytes: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "wall_clock_seconds",
+            _finite_positive_float(self.wall_clock_seconds, "wall_clock_seconds"),
+        )
+        object.__setattr__(self, "max_events", _positive_int(self.max_events, "max_events"))
+        object.__setattr__(self, "max_artifacts", _positive_int(self.max_artifacts, "max_artifacts"))
+        object.__setattr__(
+            self,
+            "max_artifact_bytes",
+            _positive_int(self.max_artifact_bytes, "max_artifact_bytes"),
+        )
