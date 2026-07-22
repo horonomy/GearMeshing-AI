@@ -219,3 +219,20 @@ def test_remediation_appends_evidence_without_rewriting_history() -> None:
         "work-run-13:verification:2",
     ]
     assert remediator.requests[0].idempotency_key == "work-run-13:remediation:1"
+
+
+def test_operation_failures_are_recorded_without_exception_secrets() -> None:
+    executor = FakeExecutor()
+    executor.error = RuntimeError("Authorization: Bearer should-never-be-recorded")
+    checkpoints = MemoryCheckpoints()
+    runner, *_ = _runner(checkpoints, executor=executor)
+
+    failed = runner.run(_approved())
+
+    assert failed.state.value == "failed"
+    assert failed.events[-1].details == (
+        ("failure_code", "operation_failed"),
+        ("stage", "execution"),
+    )
+    assert "Bearer" not in repr(failed)
+    assert "should-never-be-recorded" not in repr(checkpoints.saved)
