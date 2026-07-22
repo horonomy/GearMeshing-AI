@@ -94,3 +94,19 @@ def test_configuration_is_immutable_bounded_and_credential_safe() -> None:
         configuration(site_url="https://example.com:not-a-port")
     with pytest.raises(JiraConfigurationError):
         configuration(retry_base_seconds=float("nan"))
+
+
+async def test_ready_issue_is_normalized_without_inventing_requirements() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/rest/api/3/issue/GMAI-17"
+        assert request.url.params["properties"] == "gearmeshing-ai.repository"
+        return httpx.Response(200, json=issue_payload())
+
+    adapter = provider(handler)
+    item = await adapter.get_work_item("GMAI-17")
+    readiness = await adapter.evaluate_readiness(item)
+
+    assert item.acceptance_criteria == ("It works",)
+    assert item.repository == repository()
+    assert item.metadata.values["repository_context_present"] is True
+    assert readiness.ready is True
