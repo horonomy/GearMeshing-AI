@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from urllib.parse import urlsplit
 
@@ -92,6 +93,33 @@ class WorkRunArtifact:
         )
         if self.sha256 is not None and not _SHA256_PATTERN.fullmatch(self.sha256):
             raise WorkRunValidationError("sha256 must be a lowercase hexadecimal SHA-256 digest")
+
+
+@dataclass(frozen=True, slots=True)
+class WorkRunEvent:
+    """An ordered, immutable audit event emitted by a work run."""
+
+    sequence: int
+    name: str
+    state: WorkRunState
+    actor_id: str
+    occurred_at: datetime
+    details: tuple[tuple[str, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.sequence < 1:
+            raise WorkRunValidationError("event sequence must be positive")
+        object.__setattr__(self, "name", _require_identifier(self.name, "event name"))
+        object.__setattr__(self, "actor_id", _require_identifier(self.actor_id, "actor_id"))
+        if self.occurred_at.tzinfo is None or self.occurred_at.utcoffset() is None:
+            raise WorkRunValidationError("occurred_at must be timezone-aware")
+        keys = [key for key, _ in self.details]
+        if len(keys) != len(set(keys)):
+            raise WorkRunValidationError("event detail keys must be unique")
+        for key, value in self.details:
+            _require_identifier(key, "event detail key")
+            if not value.strip():
+                raise WorkRunValidationError("event detail values must not be blank")
 
 
 class WorkRunState(StrEnum):
