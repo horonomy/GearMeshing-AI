@@ -155,6 +155,11 @@ def test_metadata_is_recursively_copied_and_frozen() -> None:
         metadata.values["new"] = "value"  # type: ignore[index]
 
 
+def test_metadata_rejects_keys_that_collide_after_normalization() -> None:
+    with pytest.raises(ValueError, match="duplicate normalized key"):
+        Metadata({" key": "first", "key": "second"})
+
+
 @pytest.mark.parametrize(
     "key",
     ["api_token", "Authorization", "user-password", "private_key", "access_key", "bearer", "session_id"],
