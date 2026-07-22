@@ -138,7 +138,11 @@ class WorkflowRunner:
             self._checkpoints.save(expected=None, updated=approved)
             return approved
         self._validate_checkpoint(checkpoint)
-        if checkpoint.correlation != approved.correlation or checkpoint.events[:1] != approved.events:
+        if (
+            checkpoint.run_id != approved.run_id
+            or checkpoint.correlation != approved.correlation
+            or checkpoint.events[:1] != approved.events
+        ):
             raise WorkflowIntegrityError("checkpoint does not extend the approved work run")
         return checkpoint
 
