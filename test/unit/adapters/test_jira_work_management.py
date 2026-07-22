@@ -595,6 +595,23 @@ async def test_new_progress_write_posts_adf_with_an_idempotency_property() -> No
     assert "not-a-real-token" not in json.dumps(posted)
 
 
+async def test_new_comment_rejects_timezone_naive_timestamp() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"comments": [], "total": 0})
+        return httpx.Response(201, json={"id": "10002", "created": "2026-07-22T05:01:00"})
+
+    with pytest.raises(JiraResponseError, match="comment creation timestamp"):
+        await provider(handler, allow_writes=True).update_progress(
+            ProgressUpdate(
+                work_item_key="GMAI-17",
+                idempotency_key="run-1:progress:75",
+                summary="Verifying adapter",
+                percent_complete=75,
+            )
+        )
+
+
 async def test_blocked_readiness_result_can_be_posted_to_jira() -> None:
     posted: dict[str, object] = {}
 
