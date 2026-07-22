@@ -289,7 +289,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             raise JiraResponseError("Jira repository property does not match the configured repository")
         return parsed, True
 
-    async def get_work_item(self, work_item_key: str) -> WorkItem:
+    async def _get_work_item(self, work_item_key: str) -> WorkItem:
         key = self._validated_issue_key(work_item_key)
         payload = self._object(
             await self._request_json(
@@ -340,8 +340,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             ),
         )
 
-    async def evaluate_readiness(self, work_item: WorkItem) -> ReadinessResult:
-        self.require_capability(WorkManagementCapability.EVALUATE_READINESS)
+    async def _evaluate_readiness(self, work_item: WorkItem) -> ReadinessResult:
         metadata = work_item.metadata.values
         problems: list[ReadinessProblem] = []
         if metadata.get("issue_type") not in {"Story", "Task"}:
@@ -487,7 +486,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             f"GearMeshing-AI specification validation blocked:\n{diagnostics}",
         )
 
-    async def update_progress(self, update: ProgressUpdate) -> OperationReceipt:
+    async def _update_progress(self, update: ProgressUpdate) -> OperationReceipt:
         return await self._publish_comment(
             WorkManagementCapability.UPDATE_PROGRESS,
             update.work_item_key,
@@ -495,7 +494,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             f"GearMeshing-AI progress ({update.percent_complete}%): {update.summary}",
         )
 
-    async def report_blocker(self, update: BlockerUpdate) -> OperationReceipt:
+    async def _report_blocker(self, update: BlockerUpdate) -> OperationReceipt:
         return await self._publish_comment(
             WorkManagementCapability.REPORT_BLOCKER,
             update.work_item_key,
@@ -503,7 +502,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             f"GearMeshing-AI blocker: {update.summary}\n\n{update.details}",
         )
 
-    async def complete_work(self, update: CompletionUpdate) -> OperationReceipt:
+    async def _complete_work(self, update: CompletionUpdate) -> OperationReceipt:
         evidence = "\n".join(f"- {url}" for url in update.evidence_urls)
         return await self._publish_comment(
             WorkManagementCapability.COMPLETE_WORK,
@@ -512,7 +511,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             f"GearMeshing-AI completed: {update.summary}\n\nEvidence:\n{evidence}",
         )
 
-    async def attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
+    async def _attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
         return await self._publish_comment(
             WorkManagementCapability.ATTACH_ARTIFACT,
             update.work_item_key,
