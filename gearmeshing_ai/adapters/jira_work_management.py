@@ -83,7 +83,7 @@ class JiraConfiguration:
     """Immutable Jira connection and bounded retry policy."""
 
     site_url: str
-    email: str
+    email: str = field(repr=False)
     api_token: str = field(repr=False, compare=False)
     project_key: str
     repository: RepositoryReference
