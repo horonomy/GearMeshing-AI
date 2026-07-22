@@ -378,3 +378,21 @@ def test_remediation_cycles_stop_at_the_configured_limit() -> None:
         ("failure_code", "remediation_limit_reached"),
         ("stage", "verification"),
     )
+
+
+def test_runner_rejects_non_increasing_audit_timestamps() -> None:
+    approved = _approved()
+    checkpoints = MemoryCheckpoints()
+    runner = WorkflowRunner(
+        checkpoints=checkpoints,
+        executor=FakeExecutor(),
+        verifier=FakeVerifier(),
+        remediator=FakeRemediator(),
+        publisher=FakePublisher(),
+        clock=lambda: START,
+    )
+
+    with pytest.raises(WorkflowIntegrityError, match="increase monotonically"):
+        runner.run(approved)
+
+    assert checkpoints.saved == [approved]
