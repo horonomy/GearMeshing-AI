@@ -397,6 +397,21 @@ async def test_cancellation_preserves_already_streamed_artifacts() -> None:
     assert result.artifacts == (artifact,)
 
 
+async def test_result_completes_a_partially_consumed_cancelled_stream() -> None:
+    executor = FakeCodingExecutor(capabilities=make_capabilities(), progress_messages=("Must not run",))
+    session = await executor.start(make_request())
+    stream = session.events()
+
+    assert (await anext(stream)).kind is EventKind.STARTED
+    await session.cancel("Stop partial stream")
+    result = await session.result()
+
+    assert result.outcome is TerminalOutcome.CANCELLED
+    assert result.failure is not None
+    assert result.failure.message == "Stop partial stream"
+    assert [event async for event in stream] == []
+
+
 def test_execution_result_rejects_artifacts_over_the_byte_limit() -> None:
     request = make_request()
     oversized = ExecutionArtifact(
