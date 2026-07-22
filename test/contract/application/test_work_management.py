@@ -137,3 +137,9 @@ def test_metadata_is_recursively_copied_and_frozen() -> None:
     assert metadata.values["context"] == {"attempt": 1}
     with pytest.raises(TypeError):
         metadata.values["new"] = "value"  # type: ignore[index]
+
+
+@pytest.mark.parametrize("key", ["api_token", "Authorization", "user-password", "private_key"])
+def test_metadata_rejects_sensitive_keys_at_any_depth(key: str) -> None:
+    with pytest.raises(ValueError, match="sensitive key"):
+        Metadata({"context": {key: "must-not-leak"}})
