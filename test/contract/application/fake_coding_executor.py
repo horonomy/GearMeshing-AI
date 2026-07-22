@@ -61,6 +61,7 @@ class FakeExecutionSession:
 
     async def _stream_events(self) -> AsyncIterator[ExecutionEvent]:
         sequence = 1
+        emitted_artifacts: list[ExecutionArtifact] = []
         yield ExecutionEvent(sequence, EventKind.STARTED, "Execution started")
         planned_events = len(self._progress_messages) + len(self._artifacts) + 2
         if not self._is_cancelled() and planned_events > self._request.limits.max_events:
@@ -100,8 +101,9 @@ class FakeExecutionSession:
                     f"Produced artifact {artifact.relative_path}",
                     artifact=artifact,
                 )
+                emitted_artifacts.append(artifact)
         sequence += 1
-        self._result = self._build_result(sequence)
+        self._result = self._build_result(sequence, tuple(emitted_artifacts))
         yield ExecutionEvent(
             sequence,
             EventKind.TERMINAL,
@@ -130,7 +132,11 @@ class FakeExecutionSession:
         if self._cancel_reason is None:
             self._cancel_reason = normalized
 
-    def _build_result(self, events_emitted: int) -> ExecutionResult:
+    def _build_result(
+        self,
+        events_emitted: int,
+        emitted_artifacts: tuple[ExecutionArtifact, ...],
+    ) -> ExecutionResult:
         failure: FailureMetadata | None
         if self._cancel_reason is not None:
             failure = FailureMetadata(
@@ -139,11 +145,11 @@ class FakeExecutionSession:
                 self._cancel_reason,
             )
             outcome = TerminalOutcome.CANCELLED
-            artifacts: tuple[ExecutionArtifact, ...] = ()
+            artifacts = emitted_artifacts
         else:
             failure = self._failure
             outcome = self._outcome
-            artifacts = self._artifacts
+            artifacts = emitted_artifacts
         return ExecutionResult(
             execution_id=self.execution_id,
             outcome=outcome,
