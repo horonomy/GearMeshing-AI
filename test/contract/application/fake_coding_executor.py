@@ -63,13 +63,13 @@ class FakeExecutionSession:
         sequence = 1
         emitted_artifacts: list[ExecutionArtifact] = []
         yield ExecutionEvent(sequence, EventKind.STARTED, "Execution started")
-        planned_events = len(self._progress_messages) + len(self._artifacts) + 2
-        if not self._is_cancelled() and planned_events > self._request.limits.max_events:
+        exhaustion_reason = self._resource_exhaustion_reason()
+        if not self._is_cancelled() and exhaustion_reason is not None:
             sequence += 1
             failure = FailureMetadata(
                 FailureCategory.RESOURCE,
-                "event_limit_exhausted",
-                "The execution plan exceeds its event limit",
+                "execution_limit_exhausted",
+                exhaustion_reason,
             )
             self._result = ExecutionResult(
                 execution_id=self.execution_id,
@@ -113,6 +113,17 @@ class FakeExecutionSession:
 
     def _is_cancelled(self) -> bool:
         return self._cancel_reason is not None
+
+    def _resource_exhaustion_reason(self) -> str | None:
+        limits = self._request.limits
+        planned_events = len(self._progress_messages) + len(self._artifacts) + 2
+        if planned_events > limits.max_events:
+            return "The execution plan exceeds its event limit"
+        if len(self._artifacts) > limits.max_artifacts:
+            return "The execution plan exceeds its artifact count limit"
+        if sum(artifact.size_bytes for artifact in self._artifacts) > limits.max_artifact_bytes:
+            return "The execution plan exceeds its artifact byte limit"
+        return None
 
     async def result(self) -> ExecutionResult:
         if self._result is None:
