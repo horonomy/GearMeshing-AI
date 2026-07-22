@@ -47,6 +47,7 @@ class FakeExecutionSession:
         self._cancellation_supported = cancellation_supported
         self._cancel_reason: str | None = None
         self._consumed = False
+        self._stream: AsyncIterator[ExecutionEvent] | None = None
         self._result: ExecutionResult | None = None
 
     @property
@@ -57,7 +58,8 @@ class FakeExecutionSession:
         if self._consumed:
             raise RuntimeError("the event stream may only be consumed once")
         self._consumed = True
-        return self._stream_events()
+        self._stream = self._stream_events()
+        return self._stream
 
     async def _stream_events(self) -> AsyncIterator[ExecutionEvent]:
         sequence = 1
@@ -127,11 +129,11 @@ class FakeExecutionSession:
 
     async def result(self) -> ExecutionResult:
         if self._result is None:
-            if self._consumed:
-                raise RuntimeError("the event stream has not reached its terminal event")
-            async for _ in self.events():
+            stream = self._stream if self._stream is not None else self.events()
+            async for _ in stream:
                 pass
-        assert self._result is not None
+        if self._result is None:
+            raise RuntimeError("the event stream closed before a terminal result")
         return self._result
 
     async def cancel(self, reason: str) -> None:
