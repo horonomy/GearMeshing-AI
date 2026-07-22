@@ -171,10 +171,15 @@ class WorkflowRunner:
                     raise WorkflowIntegrityError("checkpoint contains an invalid same-state event")
             elif event.state not in ALLOWED_TRANSITIONS[previous_state]:
                 raise WorkflowIntegrityError("checkpoint contains an invalid state transition")
+            elif event.name != f"entered_{event.state.value}":
+                raise WorkflowIntegrityError("checkpoint transition is missing its canonical audit event")
             previous_state = event.state
 
-        recorded_artifacts = tuple(dict(event.details)["artifact_id"] for event in artifact_events)
-        if recorded_artifacts != tuple(artifact.artifact_id for artifact in run.artifacts):
+        recorded_artifacts = tuple(
+            (dict(event.details).get("artifact_id"), dict(event.details).get("kind")) for event in artifact_events
+        )
+        actual_artifacts = tuple((artifact.artifact_id, artifact.kind) for artifact in run.artifacts)
+        if recorded_artifacts != actual_artifacts:
             raise WorkflowIntegrityError("checkpoint evidence does not match its audit events")
         if run.draft_pr_url is None and draft_pr_events:
             raise WorkflowIntegrityError("checkpoint lost its recorded Draft PR")
