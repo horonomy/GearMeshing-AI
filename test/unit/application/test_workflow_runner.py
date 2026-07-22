@@ -12,7 +12,7 @@ from gearmeshing_ai.application.workflow_runner import (
     WorkflowIntegrityError,
     WorkflowRunner,
 )
-from gearmeshing_ai.domain.work_run import WorkRun, WorkRunArtifact, WorkRunCorrelation
+from gearmeshing_ai.domain.work_run import WorkRun, WorkRunArtifact, WorkRunCorrelation, WorkRunEvent, WorkRunState
 
 START = datetime(2026, 7, 22, 4, 0, tzinfo=UTC)
 
@@ -236,3 +236,19 @@ def test_operation_failures_are_recorded_without_exception_secrets() -> None:
     )
     assert "Bearer" not in repr(failed)
     assert "should-never-be-recorded" not in repr(checkpoints.saved)
+
+
+def test_checkpoint_rejects_events_outside_the_governed_history() -> None:
+    approved = _approved()
+    tampered_event = WorkRunEvent(
+        sequence=2,
+        name="unreviewed_mutation",
+        state=WorkRunState.APPROVED,
+        actor_id="unknown-actor",
+        occurred_at=START + timedelta(seconds=1),
+    )
+    tampered = replace(approved, events=(*approved.events, tampered_event))
+    runner, *_ = _runner(MemoryCheckpoints(tampered))
+
+    with pytest.raises(WorkflowIntegrityError, match="invalid same-state event"):
+        runner.run(approved)
