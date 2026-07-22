@@ -121,6 +121,11 @@ def test_resource_limits_reject_non_integral_counts(unsafe_count: object) -> Non
         ResourceLimits(1.0, max_events=cast("int", unsafe_count), max_artifacts=1, max_artifact_bytes=1)
 
 
+def test_resource_limits_reserve_started_and_terminal_events() -> None:
+    with pytest.raises(ValueError, match="reserve STARTED and TERMINAL"):
+        ResourceLimits(1.0, max_events=1, max_artifacts=1, max_artifact_bytes=1)
+
+
 def test_request_defensively_snapshots_metadata() -> None:
     metadata: dict[str, str | int | float | None] = {"attempt": 1}
     request = make_request(metadata=metadata)
