@@ -11,6 +11,7 @@ from gearmeshing_ai.adapters.jira_errors import (
     JiraAuthorizationError,
     JiraConfigurationError,
     JiraRateLimitError,
+    JiraResponseError,
 )
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import RepositoryReference
@@ -225,3 +226,13 @@ async def test_rate_limit_retry_budget_is_enforced() -> None:
     with pytest.raises(JiraRateLimitError, match="bounded retries"):
         await adapter.get_work_item("GMAI-17")
     assert attempts == 3
+
+
+async def test_streamed_response_is_rejected_at_the_byte_limit() -> None:
+    adapter = provider(
+        lambda _: httpx.Response(200, content=b"{" + b" " * 1_024),
+        max_response_bytes=1_024,
+    )
+
+    with pytest.raises(JiraResponseError, match="byte limit"):
+        await adapter.get_work_item("GMAI-17")
