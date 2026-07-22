@@ -10,6 +10,7 @@ from gearmeshing_ai.domain.work_run import (
     WorkRun,
     WorkRunArtifact,
     WorkRunCorrelation,
+    WorkRunEvent,
     WorkRunState,
     WorkRunValidationError,
 )
@@ -120,6 +121,25 @@ def test_transition_rejects_a_timestamp_earlier_than_existing_evidence() -> None
             WorkRunState.EXECUTING,
             actor_id="agent-assembly",
             occurred_at=NOW - timedelta(seconds=1),
+        )
+
+
+def test_constructor_rejects_an_invalid_historical_state_jump() -> None:
+    approved = _approved()
+    invalid_event = WorkRunEvent(
+        sequence=2,
+        name="entered_verifying",
+        state=WorkRunState.VERIFYING,
+        actor_id="agent-assembly",
+        occurred_at=NOW + timedelta(minutes=1),
+    )
+
+    with pytest.raises(WorkRunValidationError, match="invalid state transition"):
+        WorkRun(
+            run_id=approved.run_id,
+            correlation=approved.correlation,
+            state=WorkRunState.VERIFYING,
+            events=(*approved.events, invalid_event),
         )
 
 
