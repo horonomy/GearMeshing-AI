@@ -49,6 +49,10 @@ _PROJECT_KEY = re.compile(r"^[A-Z][A-Z0-9_]{1,9}$")
 _ISSUE_KEY = re.compile(r"^[A-Z][A-Z0-9_]{1,9}-[1-9][0-9]*$")
 
 
+def _reject_nonfinite_json(value: str) -> None:
+    raise ValueError(f"non-finite JSON value {value!r} is not supported")
+
+
 def _bounded_text(value: str, field_name: str, maximum: int) -> str:
     if not isinstance(value, str):
         raise JiraConfigurationError(f"{field_name} must be a string")
@@ -244,8 +248,8 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             if not payload:
                 return None
             try:
-                return json.loads(payload)
-            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                return json.loads(payload, parse_constant=_reject_nonfinite_json)
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
                 raise JiraResponseError("Jira returned invalid JSON") from error
         raise AssertionError("rate-limit loop exhausted unexpectedly")
 
