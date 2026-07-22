@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from base64 import b64encode
 from collections.abc import Callable
@@ -25,6 +26,11 @@ from gearmeshing_ai.application.ports.work_management import (
 )
 
 type Handler = Callable[[httpx.Request], httpx.Response]
+
+
+def operation_binding(capability: str, text: str, idempotency_key: str) -> dict[str, str]:
+    digest = hashlib.sha256(f"{capability}\0{text}".encode()).hexdigest()
+    return {"idempotencyKey": idempotency_key, "operationDigest": digest}
 
 
 def repository() -> RepositoryReference:
@@ -355,7 +361,16 @@ async def test_repeated_write_reuses_comment_with_matching_idempotency_property(
                     {
                         "id": "10001",
                         "created": "2026-07-22T05:00:00Z",
-                        "properties": [{"key": "gearmeshing-ai.idempotency-key", "value": "run-1:progress:50"}],
+                        "properties": [
+                            {
+                                "key": "gearmeshing-ai.idempotency-key",
+                                "value": operation_binding(
+                                    "update_progress",
+                                    "GearMeshing-AI progress (50%): Implementing adapter",
+                                    "run-1:progress:50",
+                                ),
+                            }
+                        ],
                     }
                 ],
                 "total": 1,
@@ -395,7 +410,16 @@ async def test_new_progress_write_posts_adf_with_an_idempotency_property() -> No
 
     assert receipt.provider_reference == "10002"
     assert posted["body"] == adf(paragraph("GearMeshing-AI progress (75%): Verifying adapter"))
-    assert posted["properties"] == [{"key": "gearmeshing-ai.idempotency-key", "value": "run-1:progress:75"}]
+    assert posted["properties"] == [
+        {
+            "key": "gearmeshing-ai.idempotency-key",
+            "value": operation_binding(
+                "update_progress",
+                "GearMeshing-AI progress (75%): Verifying adapter",
+                "run-1:progress:75",
+            ),
+        }
+    ]
     assert "not-a-real-token" not in json.dumps(posted)
 
 
