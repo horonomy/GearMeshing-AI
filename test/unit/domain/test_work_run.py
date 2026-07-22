@@ -54,3 +54,27 @@ def test_approval_creates_correlated_audit_evidence() -> None:
     assert run.correlation.repository_url == "https://github.com/horonomy/GearMeshing-AI"
     assert run.events[0].name == "approved"
     assert run.events[0].actor_id == "human-product-owner"
+
+
+def test_happy_path_completes_after_recording_a_draft_pr() -> None:
+    publishing = _advance(
+        _approved(),
+        WorkRunState.EXECUTING,
+        WorkRunState.VERIFYING,
+        WorkRunState.PUBLISHING_DRAFT_PR,
+    )
+    published = publishing.record_draft_pr(
+        "https://github.com/horonomy/GearMeshing-AI/pull/2",
+        actor_id="coding-agent",
+        occurred_at=NOW + timedelta(minutes=4),
+    )
+
+    completed = published.transition_to(
+        WorkRunState.COMPLETED,
+        actor_id="agent-assembly",
+        occurred_at=NOW + timedelta(minutes=5),
+    )
+
+    assert completed.state is WorkRunState.COMPLETED
+    assert completed.draft_pr_url == "https://github.com/horonomy/GearMeshing-AI/pull/2"
+    assert tuple(event.sequence for event in completed.events) == tuple(range(1, 7))
