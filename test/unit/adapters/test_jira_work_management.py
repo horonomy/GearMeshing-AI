@@ -173,3 +173,28 @@ async def test_inaccessible_issue_fails_immediately_without_secret_disclosure(
 
     assert requests == 1
     assert "not-a-real-token" not in str(caught.value)
+
+
+async def test_rate_limits_use_bounded_exponential_backoff() -> None:
+    attempts = 0
+    delays: list[float] = []
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            return httpx.Response(429, headers={"Retry-After": "999999" if attempts == 1 else "nan"})
+        return httpx.Response(200, json=issue_payload())
+
+    async def sleep(delay: float) -> None:
+        delays.append(delay)
+
+    client = httpx.AsyncClient(
+        base_url="https://lightning-dust-mite.atlassian.net",
+        transport=httpx.MockTransport(handler),
+    )
+    adapter = JiraWorkManagementProvider(configuration(max_rate_limit_retries=2), client=client, sleep=sleep)
+
+    assert (await adapter.get_work_item("GMAI-17")).key == "GMAI-17"
+    assert attempts == 3
+    assert delays == [0.5, 1.0]
