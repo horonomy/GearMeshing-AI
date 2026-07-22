@@ -20,6 +20,7 @@ _ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _COMMAND_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 _SENSITIVE_KEY_PARTS = ("authorization", "credential", "password", "secret", "token")
+_PROTECTED_BRANCHES = frozenset({"main", "master"})
 
 
 def _required_text(value: str, name: str, *, maximum: int = 512) -> str:
@@ -65,6 +66,22 @@ def _absolute_path(value: str, name: str) -> str:
     path = PurePosixPath(normalized)
     if not path.is_absolute() or normalized != path.as_posix() or ".." in path.parts or path == PurePosixPath("/"):
         raise ValueError(f"{name} must be a normalized absolute POSIX path")
+    return normalized
+
+
+def _git_ref(value: str, name: str) -> str:
+    normalized = _required_text(value, name, maximum=256)
+    invalid_fragments = ("..", "//", "@{", "\\")
+    invalid_characters = frozenset(" ~^:?*[")
+    components = normalized.split("/")
+    if (
+        normalized.startswith(("/", "-"))
+        or normalized.endswith(("/", "."))
+        or any(fragment in normalized for fragment in invalid_fragments)
+        or any(character in invalid_characters for character in normalized)
+        or any(component.startswith(".") or component.endswith(".lock") for component in components)
+    ):
+        raise ValueError(f"{name} must be a normalized Git ref")
     return normalized
 
 
@@ -146,8 +163,14 @@ class RepositoryContext:
             raise ValueError("writable_paths must not contain duplicates")
         object.__setattr__(self, "repository_root", repository_root.as_posix())
         object.__setattr__(self, "worktree_root", worktree_root.as_posix())
-        object.__setattr__(self, "base_ref", _identifier(self.base_ref, "base_ref"))
-        object.__setattr__(self, "branch", _required_text(self.branch, "branch", maximum=256))
+        base_ref = _git_ref(self.base_ref, "base_ref")
+        branch = _git_ref(self.branch, "branch")
+        base_branch = base_ref.removeprefix("refs/heads/")
+        work_branch = branch.removeprefix("refs/heads/")
+        if work_branch == base_branch or work_branch in _PROTECTED_BRANCHES:
+            raise ValueError("branch must differ from the base and must not be protected")
+        object.__setattr__(self, "base_ref", base_ref)
+        object.__setattr__(self, "branch", branch)
         object.__setattr__(self, "writable_paths", paths)
 
 
