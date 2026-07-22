@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from gearmeshing_ai.application.ports.work_management import (
     ArtifactUpdate,
     BlockerUpdate,
@@ -76,3 +78,14 @@ class FakeProvider(WorkManagementProvider):
 
     async def attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
         return receipt(update.idempotency_key)
+
+
+def test_capabilities_raise_an_explicit_error_for_unsupported_operations() -> None:
+    capabilities = ProviderCapabilities({WorkManagementCapability.READ_WORK_ITEM})
+
+    assert capabilities.supports(WorkManagementCapability.READ_WORK_ITEM)
+    with pytest.raises(UnsupportedCapabilityError, match="jira.*attach_artifact") as caught:
+        capabilities.require("jira", WorkManagementCapability.ATTACH_ARTIFACT)
+
+    assert caught.value.provider == "jira"
+    assert caught.value.capability is WorkManagementCapability.ATTACH_ARTIFACT
