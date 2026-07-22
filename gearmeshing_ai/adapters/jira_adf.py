@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 
 type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
 
@@ -96,7 +97,7 @@ def parse_adf(value: object, *, max_nodes: int = 4_096, max_characters: int = 50
         elif current_heading is not None:
             section_values[current_heading].append(rendered)
 
-    sections = {name: "\n".join(parts).strip() for name, parts in section_values.items()}
+    sections = MappingProxyType({name: "\n".join(parts).strip() for name, parts in section_values.items()})
     return AdfDocument(text="\n\n".join(blocks).strip(), sections=sections)
 
 
