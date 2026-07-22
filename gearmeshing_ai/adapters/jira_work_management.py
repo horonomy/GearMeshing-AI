@@ -310,6 +310,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         acceptance_criteria = (
             "" if parsed_description is None else parsed_description.sections.get("acceptance criteria", "")
         )
+        normalized_criteria = tuple(line.strip() for line in acceptance_criteria.splitlines() if line.strip())
         raw_labels = fields.get("labels", [])
         if not isinstance(raw_labels, list) or not all(isinstance(label, str) for label in raw_labels):
             raise JiraResponseError("Jira returned invalid labels")
@@ -321,13 +322,13 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             key=self._string(payload.get("key"), "issue key"),
             title=self._string(fields.get("summary"), "summary"),
             description=description,
+            acceptance_criteria=normalized_criteria,
             status=self._string(status.get("name"), "status name"),
             web_url=f"{self._configuration.site_url}/browse/{quote(key, safe='')}",
             repository=repository,
             labels=tuple(cast(list[str], raw_labels)),
             metadata=Metadata(
                 {
-                    "acceptance_criteria": acceptance_criteria,
                     "description_present": description_present,
                     "issue_type": self._string(issue_type.get("name"), "issue type name"),
                     "repository_context_present": repository_context_present,
@@ -363,7 +364,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                     details="Provide a non-empty Jira description before execution.",
                 )
             )
-        if not metadata.get("acceptance_criteria"):
+        if not work_item.acceptance_criteria:
             problems.append(
                 ReadinessProblem(
                     code="missing-acceptance-criteria",
