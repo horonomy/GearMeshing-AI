@@ -157,6 +157,15 @@ class WorkRun:
                 "draft_pr_url",
                 _require_safe_url(self.draft_pr_url, "draft_pr_url", schemes=frozenset({"https"})),
             )
+        draft_pr_events = tuple(event for event in self.events if event.name == "draft_pr_recorded")
+        if self.draft_pr_url is None and draft_pr_events:
+            raise WorkRunValidationError("a Draft PR event requires its recorded URL")
+        if self.draft_pr_url is not None and (
+            len(draft_pr_events) != 1
+            or draft_pr_events[0].state is not WorkRunState.PUBLISHING_DRAFT_PR
+            or dict(draft_pr_events[0].details).get("draft_pr_url") != self.draft_pr_url
+        ):
+            raise WorkRunValidationError("the Draft PR URL must match its publishing audit event")
         if self.state is WorkRunState.COMPLETED and self.draft_pr_url is None:
             raise WorkRunValidationError("a completed work run requires a Draft PR URL")
 
