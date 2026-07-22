@@ -165,6 +165,41 @@ class WorkItem:
             raise TypeError("metadata must be Metadata")
 
 
+@dataclass(frozen=True, slots=True)
+class ReadinessProblem:
+    """Actionable reason that prevents a work item from being executed."""
+
+    code: str
+    summary: str
+    details: str
+    metadata: Metadata = Metadata()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "code", _required_text(self.code, "code"))
+        object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
+        object.__setattr__(self, "details", _required_text(self.details, "details"))
+        if not isinstance(self.metadata, Metadata):
+            raise TypeError("metadata must be Metadata")
+
+
+@dataclass(frozen=True, slots=True)
+class ReadinessResult:
+    """Readiness decision whose state is derived from its blocking problems."""
+
+    work_item_key: str
+    problems: tuple[ReadinessProblem, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
+        object.__setattr__(self, "problems", tuple(self.problems))
+        if not all(isinstance(problem, ReadinessProblem) for problem in self.problems):
+            raise TypeError("problems must contain only ReadinessProblem values")
+
+    @property
+    def ready(self) -> bool:
+        return not self.problems
+
+
 class WorkManagementProvider(ABC):
     """Boundary implemented by external work-management adapters."""
 
