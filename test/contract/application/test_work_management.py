@@ -271,6 +271,20 @@ def test_work_item_rejects_mutable_repository_values() -> None:
         )
 
 
+def test_work_item_represents_missing_repository_context() -> None:
+    item = WorkItem(
+        key="GMAI-16",
+        title="Contract",
+        description="Approved specification",
+        acceptance_criteria=(),
+        status="In Progress",
+        web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
+        repository=None,
+    )
+
+    assert item.repository is None
+
+
 def test_readiness_is_derived_from_immutable_problems() -> None:
     problems = [ReadinessProblem(code="missing-approval", summary="Approval missing", details="Await owner approval")]
     blocked = ReadinessResult(work_item_key="GMAI-16", problems=problems)  # type: ignore[arg-type]
