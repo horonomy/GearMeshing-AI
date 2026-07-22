@@ -204,6 +204,22 @@ async def test_executor_cancellation_is_idempotent_and_terminal() -> None:
     assert result.failure.message == "Human authority checkpoint"
 
 
+async def test_cancellation_after_started_matches_terminal_result() -> None:
+    executor = FakeCodingExecutor(capabilities=make_capabilities(), progress_messages=("Must not run",))
+    session = await executor.start(make_request())
+    stream = session.events()
+
+    started = await anext(stream)
+    await session.cancel("Stopped after start")
+    remaining = [event async for event in stream]
+    result = await session.result()
+
+    assert started.kind is EventKind.STARTED
+    assert [event.kind for event in remaining] == [EventKind.TERMINAL]
+    assert remaining[0].metadata["outcome"] == TerminalOutcome.CANCELLED.value
+    assert result.outcome is TerminalOutcome.CANCELLED
+
+
 def test_execution_result_rejects_artifacts_over_the_byte_limit() -> None:
     request = make_request()
     oversized = ExecutionArtifact(
