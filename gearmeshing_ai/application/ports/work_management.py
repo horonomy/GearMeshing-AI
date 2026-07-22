@@ -9,6 +9,7 @@ from datetime import datetime
 from enum import StrEnum
 from math import isfinite
 from types import MappingProxyType
+from unicodedata import category
 from urllib.parse import urlsplit
 
 type MetadataScalar = str | int | float | bool | None
@@ -31,15 +32,21 @@ _SENSITIVE_METADATA_KEYS = frozenset(
 )
 
 
-def _required_text(value: str, field: str) -> str:
+def _required_text(value: str, field: str, *, max_length: int = 256) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string")
     normalized = value.strip()
     if not normalized:
         raise ValueError(f"{field} must not be empty")
+    if len(normalized) > max_length:
+        raise ValueError(f"{field} must not exceed {max_length} characters")
+    if any(category(character).startswith("C") for character in normalized):
+        raise ValueError(f"{field} must not contain control characters")
     return normalized
 
 
 def _https_url_without_credentials(value: str, field: str) -> str:
-    normalized = _required_text(value, field)
+    normalized = _required_text(value, field, max_length=2048)
     parsed = urlsplit(normalized)
     if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError(f"{field} must be an absolute HTTPS URL")
@@ -69,7 +76,7 @@ def _freeze_metadata(values: Mapping[str, object], path: str = "metadata") -> Ma
     for key, value in values.items():
         if not isinstance(key, str):
             raise TypeError(f"{path} keys must be strings")
-        normalized_key = _required_text(key, f"{path} key")
+        normalized_key = _required_text(key, f"{path} key", max_length=128)
         security_key = "".join(character for character in normalized_key.casefold() if character.isalnum())
         if any(marker in security_key for marker in _SENSITIVE_METADATA_KEYS):
             raise ValueError(f"{path} must not contain sensitive key {normalized_key!r}")
@@ -123,6 +130,7 @@ class ProviderCapabilities:
         return capability in self.values
 
     def require(self, provider: str, capability: WorkManagementCapability) -> None:
+        provider = _required_text(provider, "provider")
         if not self.supports(capability):
             raise UnsupportedCapabilityError(provider, capability)
 
@@ -158,8 +166,12 @@ class WorkItem:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "key", _required_text(self.key, "key"))
-        object.__setattr__(self, "title", _required_text(self.title, "title"))
-        object.__setattr__(self, "description", _required_text(self.description, "description"))
+        object.__setattr__(self, "title", _required_text(self.title, "title", max_length=512))
+        object.__setattr__(
+            self,
+            "description",
+            _required_text(self.description, "description", max_length=50_000),
+        )
         object.__setattr__(self, "status", _required_text(self.status, "status"))
         object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
         normalized_labels = tuple(_required_text(label, "label") for label in self.labels)
@@ -181,8 +193,8 @@ class ReadinessProblem:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "code", _required_text(self.code, "code"))
-        object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
-        object.__setattr__(self, "details", _required_text(self.details, "details"))
+        object.__setattr__(self, "summary", _required_text(self.summary, "summary", max_length=512))
+        object.__setattr__(self, "details", _required_text(self.details, "details", max_length=10_000))
         if not isinstance(self.metadata, Metadata):
             raise TypeError("metadata must be Metadata")
 
@@ -218,7 +230,7 @@ class ProgressUpdate:
     def __post_init__(self) -> None:
         object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
         object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
-        object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
+        object.__setattr__(self, "summary", _required_text(self.summary, "summary", max_length=512))
         if (
             isinstance(self.percent_complete, bool)
             or not isinstance(self.percent_complete, int)
@@ -242,8 +254,8 @@ class BlockerUpdate:
     def __post_init__(self) -> None:
         object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
         object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
-        object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
-        object.__setattr__(self, "details", _required_text(self.details, "details"))
+        object.__setattr__(self, "summary", _required_text(self.summary, "summary", max_length=512))
+        object.__setattr__(self, "details", _required_text(self.details, "details", max_length=10_000))
         if not isinstance(self.metadata, Metadata):
             raise TypeError("metadata must be Metadata")
 
@@ -261,7 +273,7 @@ class CompletionUpdate:
     def __post_init__(self) -> None:
         object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
         object.__setattr__(self, "idempotency_key", _required_text(self.idempotency_key, "idempotency_key"))
-        object.__setattr__(self, "summary", _required_text(self.summary, "summary"))
+        object.__setattr__(self, "summary", _required_text(self.summary, "summary", max_length=512))
         evidence_urls = tuple(_https_url_without_credentials(url, "evidence_url") for url in self.evidence_urls)
         if not evidence_urls:
             raise ValueError("evidence_urls must contain at least one URL")
