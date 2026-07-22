@@ -35,8 +35,8 @@ class MemoryCheckpoints:
 
 
 class TickingClock:
-    def __init__(self) -> None:
-        self.current = START
+    def __init__(self, current: datetime = START) -> None:
+        self.current = current
 
     def __call__(self) -> datetime:
         self.current += timedelta(seconds=1)
