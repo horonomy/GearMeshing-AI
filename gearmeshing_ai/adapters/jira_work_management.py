@@ -309,7 +309,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         description = (
             " ".join(parsed_description.text.splitlines())
             if description_present and parsed_description is not None
-            else "[Missing Jira description]"
+            else ""
         )
         acceptance_criteria = (
             "" if parsed_description is None else parsed_description.sections.get("acceptance criteria", "")
@@ -380,7 +380,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                 ReadinessProblem(
                     code="missing-repository-context",
                     summary="Add repository context",
-                    details=f"Set the Jira issue property {_REPOSITORY_PROPERTY} to the approved repository identity.",
+                    details="Configure the approved repository identity before execution.",
                 )
             )
         return ReadinessResult(work_item_key=work_item.key, problems=tuple(problems))
