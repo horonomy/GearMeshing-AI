@@ -16,13 +16,16 @@ type MetadataValue = MetadataScalar | tuple[MetadataValue, ...] | Mapping[str, M
 
 _SENSITIVE_METADATA_KEYS = frozenset(
     {
+        "accesskey",
         "apikey",
         "authorization",
+        "bearer",
         "cookie",
         "credential",
         "password",
         "privatekey",
         "secret",
+        "sessionid",
         "token",
     }
 )
