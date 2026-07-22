@@ -122,3 +122,18 @@ def test_repository_reference_is_an_immutable_horonomy_identity() -> None:
 def test_repository_reference_rejects_unsafe_urls(web_url: str) -> None:
     with pytest.raises(ValueError):
         RepositoryReference(provider="github", owner="horonomy", name="GearMeshing-AI", web_url=web_url)
+
+
+def test_metadata_is_recursively_copied_and_frozen() -> None:
+    nested = {"labels": ["mvp-1"], "context": {"attempt": 1}}
+    metadata = Metadata(nested)
+
+    nested["labels"] = ["changed"]
+    nested_context = nested["context"]
+    assert isinstance(nested_context, dict)
+    nested_context["attempt"] = 2
+
+    assert metadata.values["labels"] == ("mvp-1",)
+    assert metadata.values["context"] == {"attempt": 1}
+    with pytest.raises(TypeError):
+        metadata.values["new"] = "value"  # type: ignore[index]
