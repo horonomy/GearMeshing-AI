@@ -318,3 +318,18 @@ def test_checkpoint_cannot_change_external_correlation() -> None:
 
     with pytest.raises(WorkflowIntegrityError, match="does not extend"):
         runner.run(approved)
+
+
+def test_checkpoint_transitions_require_canonical_audit_events() -> None:
+    approved = _approved()
+    executing = approved.transition_to(
+        WorkRunState.EXECUTING,
+        actor_id="agent-assembly",
+        occurred_at=START + timedelta(seconds=1),
+    )
+    renamed_event = replace(executing.events[-1], name="unreviewed_execution")
+    tampered = replace(executing, events=(executing.events[0], renamed_event))
+    runner, *_ = _runner(MemoryCheckpoints(tampered))
+
+    with pytest.raises(WorkflowIntegrityError, match="canonical audit event"):
+        runner.run(approved)
