@@ -201,6 +201,19 @@ async def test_missing_description_remains_empty_and_blocks_readiness() -> None:
     }
 
 
+async def test_jira_repository_property_cannot_override_approved_configuration() -> None:
+    payload = issue_payload()
+    properties = payload["properties"]
+    assert isinstance(properties, dict)
+    repository_property = properties["gearmeshing-ai.repository"]
+    assert isinstance(repository_property, dict)
+    repository_property["owner"] = "untrusted-owner"
+    adapter = provider(lambda _: httpx.Response(200, json=payload))
+
+    with pytest.raises(JiraResponseError, match="does not match"):
+        await adapter.get_work_item("GMAI-17")
+
+
 async def test_unsupported_issue_type_is_blocked() -> None:
     adapter = provider(lambda _: httpx.Response(200, json=issue_payload(issue_type="Epic")))
 
