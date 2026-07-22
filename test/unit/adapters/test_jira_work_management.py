@@ -142,10 +142,11 @@ async def test_incomplete_issue_returns_actionable_blocking_diagnostics() -> Non
     readiness = await adapter.evaluate_readiness(item)
 
     assert item.acceptance_criteria == ()
+    assert item.repository == repository()
+    assert item.metadata.values["repository_context_present"] is True
     assert {problem.code for problem in readiness.problems} == {
         "spec-not-ready",
         "missing-acceptance-criteria",
-        "missing-repository-context",
     }
 
 
