@@ -101,6 +101,11 @@ def test_capabilities_are_defensively_frozen() -> None:
     assert capabilities.values == frozenset({WorkManagementCapability.READ_WORK_ITEM})
 
 
+def test_capabilities_reject_unknown_runtime_values() -> None:
+    with pytest.raises(TypeError, match="WorkManagementCapability"):
+        ProviderCapabilities({"read_work_item"})  # type: ignore[arg-type]
+
+
 def test_repository_reference_is_an_immutable_horonomy_identity() -> None:
     value = repository()
 
