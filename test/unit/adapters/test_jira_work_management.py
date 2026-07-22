@@ -6,7 +6,11 @@ from dataclasses import FrozenInstanceError
 import httpx
 import pytest
 
-from gearmeshing_ai.adapters.jira_errors import JiraConfigurationError
+from gearmeshing_ai.adapters.jira_errors import (
+    JiraAuthenticationError,
+    JiraAuthorizationError,
+    JiraConfigurationError,
+)
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import RepositoryReference
 
@@ -143,3 +147,29 @@ async def test_unsupported_issue_type_is_blocked() -> None:
 
     assert [problem.code for problem in readiness.problems] == ["unsupported-issue-type"]
     assert readiness.problems[0].details == "MVP 1 accepts Jira Story and Task issues only."
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_error", "remediation"),
+    [
+        (401, JiraAuthenticationError, "replace the API token"),
+        (403, JiraAuthorizationError, "grant the account"),
+    ],
+)
+async def test_inaccessible_issue_fails_immediately_without_secret_disclosure(
+    status_code: int,
+    expected_error: type[Exception],
+    remediation: str,
+) -> None:
+    requests = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(status_code)
+
+    with pytest.raises(expected_error, match=remediation) as caught:
+        await provider(handler).get_work_item("GMAI-17")
+
+    assert requests == 1
+    assert "not-a-real-token" not in str(caught.value)
