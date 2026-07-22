@@ -136,6 +136,21 @@ async def test_response_issue_key_must_match_the_requested_issue() -> None:
         await adapter.get_work_item("GMAI-17")
 
 
+@pytest.mark.parametrize("malformation", ["adf", "model"])
+async def test_malformed_jira_payload_uses_typed_response_errors(malformation: str) -> None:
+    payload = issue_payload()
+    fields = payload["fields"]
+    assert isinstance(fields, dict)
+    if malformation == "adf":
+        fields["description"] = {"type": "doc", "version": 1, "content": "not-an-array"}
+    else:
+        fields["summary"] = "unsafe\nsummary"
+    adapter = provider(lambda _: httpx.Response(200, json=payload))
+
+    with pytest.raises(JiraResponseError, match="cannot be normalized safely"):
+        await adapter.get_work_item("GMAI-17")
+
+
 async def test_incomplete_issue_returns_actionable_blocking_diagnostics() -> None:
     adapter = provider(
         lambda _: httpx.Response(
