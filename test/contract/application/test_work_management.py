@@ -199,3 +199,17 @@ def test_blocker_updates_require_actionable_details() -> None:
             summary="Approval unavailable",
             details=" ",
         )
+
+
+@pytest.mark.parametrize(
+    "evidence_urls",
+    [(), ("http://github.com/horonomy/GearMeshing-AI/pull/1",), ("https://token@github.com/pull/1",)],
+)
+def test_completion_updates_require_secure_evidence(evidence_urls: tuple[str, ...]) -> None:
+    with pytest.raises(ValueError):
+        CompletionUpdate(
+            work_item_key="GMAI-16",
+            idempotency_key="run-1:complete",
+            summary="Contract delivered",
+            evidence_urls=evidence_urls,
+        )
