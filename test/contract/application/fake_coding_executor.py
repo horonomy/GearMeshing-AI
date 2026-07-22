@@ -62,6 +62,28 @@ class FakeExecutionSession:
     async def _stream_events(self) -> AsyncIterator[ExecutionEvent]:
         sequence = 1
         yield ExecutionEvent(sequence, EventKind.STARTED, "Execution started")
+        planned_events = len(self._progress_messages) + len(self._artifacts) + 2
+        if self._cancel_reason is None and planned_events > self._request.limits.max_events:
+            sequence += 1
+            failure = FailureMetadata(
+                FailureCategory.RESOURCE,
+                "event_limit_exhausted",
+                "The execution plan exceeds its event limit",
+            )
+            self._result = ExecutionResult(
+                execution_id=self.execution_id,
+                outcome=TerminalOutcome.RESOURCE_EXHAUSTED,
+                limits=self._request.limits,
+                events_emitted=sequence,
+                failure=failure,
+            )
+            yield ExecutionEvent(
+                sequence,
+                EventKind.TERMINAL,
+                "Execution reached a terminal outcome",
+                {"outcome": self._result.outcome.value},
+            )
+            return
         if self._cancel_reason is None:
             for message in self._progress_messages:
                 if self._cancel_reason is not None:
