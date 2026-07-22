@@ -96,3 +96,9 @@ def test_repository_context_rejects_unsafe_writable_paths(unsafe_path: str) -> N
 def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
     with pytest.raises(ValueError, match="without paths or shell syntax"):
         ToolGrant("shell", frozenset({"execute"}), (unsafe_command,))
+
+
+@pytest.mark.parametrize("unsafe_duration", (True, float("nan"), float("inf"), float("-inf")))
+def test_resource_limits_reject_non_finite_or_boolean_durations(unsafe_duration: float) -> None:
+    with pytest.raises(ValueError, match="finite and positive"):
+        ResourceLimits(unsafe_duration, max_events=1, max_artifacts=1, max_artifact_bytes=1)
