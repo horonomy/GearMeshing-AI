@@ -110,3 +110,26 @@ async def test_ready_issue_is_normalized_without_inventing_requirements() -> Non
     assert item.repository == repository()
     assert item.metadata.values["repository_context_present"] is True
     assert readiness.ready is True
+
+
+async def test_incomplete_issue_returns_actionable_blocking_diagnostics() -> None:
+    adapter = provider(
+        lambda _: httpx.Response(
+            200,
+            json=issue_payload(
+                labels=[],
+                description=adf(paragraph("Product intent only")),
+                include_repository=False,
+            ),
+        )
+    )
+
+    item = await adapter.get_work_item("GMAI-17")
+    readiness = await adapter.evaluate_readiness(item)
+
+    assert item.acceptance_criteria == ()
+    assert {problem.code for problem in readiness.problems} == {
+        "spec-not-ready",
+        "missing-acceptance-criteria",
+        "missing-repository-context",
+    }
