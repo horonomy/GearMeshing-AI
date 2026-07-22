@@ -212,3 +212,13 @@ async def test_executor_rejects_grants_outside_its_capabilities() -> None:
 
     with pytest.raises(ValueError, match="unsupported tool grants: shell"):
         await executor.start(make_request())
+
+
+async def test_executor_start_is_idempotent_for_the_same_request() -> None:
+    executor = FakeCodingExecutor(capabilities=make_capabilities())
+    request = make_request()
+
+    first = await executor.start(request)
+    second = await executor.start(request)
+
+    assert first is second
