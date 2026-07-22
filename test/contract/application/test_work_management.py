@@ -235,3 +235,52 @@ def test_operation_receipts_require_timezone_aware_timestamps() -> None:
             provider_reference="request-1",
             accepted_at=datetime(2026, 7, 22),
         )
+
+
+async def test_provider_contract_exposes_typed_asynchronous_operations() -> None:
+    provider = FakeProvider()
+    item = await provider.get_work_item("GMAI-16")
+
+    assert (await provider.evaluate_readiness(item)).ready
+    updates = (
+        await provider.update_progress(
+            ProgressUpdate(
+                work_item_key=item.key,
+                idempotency_key="run-1:progress:50",
+                summary="Implementing",
+                percent_complete=50,
+            )
+        ),
+        await provider.report_blocker(
+            BlockerUpdate(
+                work_item_key=item.key,
+                idempotency_key="run-1:blocker",
+                summary="Approval missing",
+                details="Await the repository owner",
+            )
+        ),
+        await provider.complete_work(
+            CompletionUpdate(
+                work_item_key=item.key,
+                idempotency_key="run-1:complete",
+                summary="Contract delivered",
+                evidence_urls=("https://github.com/horonomy/GearMeshing-AI/pull/1",),
+            )
+        ),
+        await provider.attach_artifact(
+            ArtifactUpdate(
+                work_item_key=item.key,
+                idempotency_key="run-1:artifact:pr",
+                name="Draft PR",
+                kind="pull-request",
+                web_url="https://github.com/horonomy/GearMeshing-AI/pull/1",
+            )
+        ),
+    )
+
+    assert [result.idempotency_key for result in updates] == [
+        "run-1:progress:50",
+        "run-1:blocker",
+        "run-1:complete",
+        "run-1:artifact:pr",
+    ]
