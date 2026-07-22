@@ -175,7 +175,18 @@ def test_request_rejects_duplicate_canonical_metadata_keys() -> None:
 
 @pytest.mark.parametrize(
     "unsafe_metadata",
-    ({"api_token": "redacted"}, {"password_hint": "redacted"}, {"valid": float("nan")}, {"valid": True}),
+    (
+        {"api_token": "redacted"},
+        {"password_hint": "redacted"},
+        {"APIKey": "redacted"},
+        {"access-key": "redacted"},
+        {"privateKey": "redacted"},
+        {"cookie": "redacted"},
+        {"sessionId": "redacted"},
+        {"bearer": "redacted"},
+        {"valid": float("nan")},
+        {"valid": True},
+    ),
 )
 def test_request_rejects_credentials_and_unsafe_metadata_values(
     unsafe_metadata: dict[str, str | int | float | None],
