@@ -138,6 +138,33 @@ class RepositoryReference:
         object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
 
 
+@dataclass(frozen=True, slots=True)
+class WorkItem:
+    """Provider-neutral snapshot of an approved unit of work."""
+
+    key: str
+    title: str
+    description: str
+    status: str
+    web_url: str
+    repository: RepositoryReference
+    labels: tuple[str, ...] = ()
+    metadata: Metadata = Metadata()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "key", _required_text(self.key, "key"))
+        object.__setattr__(self, "title", _required_text(self.title, "title"))
+        object.__setattr__(self, "description", _required_text(self.description, "description"))
+        object.__setattr__(self, "status", _required_text(self.status, "status"))
+        object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
+        normalized_labels = tuple(_required_text(label, "label") for label in self.labels)
+        if len(set(normalized_labels)) != len(normalized_labels):
+            raise ValueError("labels must not contain duplicates")
+        object.__setattr__(self, "labels", normalized_labels)
+        if not isinstance(self.metadata, Metadata):
+            raise TypeError("metadata must be Metadata")
+
+
 class WorkManagementProvider(ABC):
     """Boundary implemented by external work-management adapters."""
 
