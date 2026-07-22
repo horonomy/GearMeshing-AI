@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import urlsplit
 
@@ -16,6 +17,7 @@ class InvalidTransitionError(WorkRunValidationError):
 
 
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
+_JIRA_ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
 
 
 def _require_identifier(value: str, field_name: str) -> str:
@@ -35,6 +37,39 @@ def _require_safe_url(value: str, field_name: str, *, schemes: frozenset[str]) -
     if parsed.fragment:
         raise WorkRunValidationError(f"{field_name} must not contain a fragment")
     return candidate
+
+
+@dataclass(frozen=True, slots=True)
+class WorkRunCorrelation:
+    """Stable external references used throughout a work run."""
+
+    jira_issue_key: str
+    jira_issue_url: str
+    repository_url: str
+    branch_name: str
+    agent_assembly_run_id: str
+
+    def __post_init__(self) -> None:
+        issue_key = self.jira_issue_key.strip().upper()
+        if not _JIRA_ISSUE_KEY_PATTERN.fullmatch(issue_key):
+            raise WorkRunValidationError("jira_issue_key must be a valid Jira issue key")
+        object.__setattr__(self, "jira_issue_key", issue_key)
+        object.__setattr__(
+            self,
+            "jira_issue_url",
+            _require_safe_url(self.jira_issue_url, "jira_issue_url", schemes=frozenset({"https"})),
+        )
+        object.__setattr__(
+            self,
+            "repository_url",
+            _require_safe_url(self.repository_url, "repository_url", schemes=frozenset({"https"})),
+        )
+        object.__setattr__(self, "branch_name", _require_identifier(self.branch_name, "branch_name"))
+        object.__setattr__(
+            self,
+            "agent_assembly_run_id",
+            _require_identifier(self.agent_assembly_run_id, "agent_assembly_run_id"),
+        )
 
 
 class WorkRunState(StrEnum):
