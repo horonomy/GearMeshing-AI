@@ -95,7 +95,6 @@ class TerminalOutcome(StrEnum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
-    RESOURCE_EXHAUSTED = "resource_exhausted"
 
 
 class FailureCategory(StrEnum):
