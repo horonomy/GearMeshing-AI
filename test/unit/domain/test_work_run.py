@@ -109,3 +109,22 @@ def test_invalid_transition_is_rejected_without_changing_the_run() -> None:
 
     assert approved.state is WorkRunState.APPROVED
     assert len(approved.events) == 1
+
+
+@pytest.mark.parametrize(
+    "terminal_state",
+    [WorkRunState.FAILED, WorkRunState.BLOCKED, WorkRunState.CANCELLED],
+)
+def test_terminal_outcomes_cannot_be_restarted(terminal_state: WorkRunState) -> None:
+    terminal = _approved().transition_to(
+        terminal_state,
+        actor_id="agent-assembly",
+        occurred_at=NOW + timedelta(minutes=1),
+    )
+
+    with pytest.raises(InvalidTransitionError, match=f"{terminal_state.value} to executing"):
+        terminal.transition_to(
+            WorkRunState.EXECUTING,
+            actor_id="agent-assembly",
+            occurred_at=NOW + timedelta(minutes=2),
+        )
