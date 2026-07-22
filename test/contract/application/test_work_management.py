@@ -107,3 +107,18 @@ def test_repository_reference_is_an_immutable_horonomy_identity() -> None:
     assert value.web_url == "https://github.com/horonomy/GearMeshing-AI"
     with pytest.raises(FrozenInstanceError):
         value.name = "changed"  # type: ignore[misc]
+
+
+@pytest.mark.parametrize(
+    "web_url",
+    [
+        "http://github.com/horonomy/GearMeshing-AI",
+        "https://token@github.com/horonomy/GearMeshing-AI",
+        "https://github.com/horonomy/GearMeshing-AI?token=value",
+        "https://github.com/horonomy/GearMeshing-AI#secret",
+        "/horonomy/GearMeshing-AI",
+    ],
+)
+def test_repository_reference_rejects_unsafe_urls(web_url: str) -> None:
+    with pytest.raises(ValueError):
+        RepositoryReference(provider="github", owner="horonomy", name="GearMeshing-AI", web_url=web_url)
