@@ -229,6 +229,34 @@ class WorkRun:
             artifacts=(*self.artifacts, artifact),
         )
 
+    def record_draft_pr(
+        self,
+        url: str,
+        *,
+        actor_id: str,
+        occurred_at: datetime,
+    ) -> WorkRun:
+        """Record the reviewable Draft PR before the run can complete."""
+
+        if self.state is not WorkRunState.PUBLISHING_DRAFT_PR:
+            raise WorkRunValidationError("a Draft PR can only be recorded while publishing")
+        if self.draft_pr_url is not None:
+            raise WorkRunValidationError("the Draft PR URL has already been recorded")
+        draft_pr_url = _require_safe_url(url, "draft_pr_url", schemes=frozenset({"https"}))
+        event = WorkRunEvent(
+            sequence=len(self.events) + 1,
+            name="draft_pr_recorded",
+            state=self.state,
+            actor_id=actor_id,
+            occurred_at=occurred_at,
+            details=(("draft_pr_url", draft_pr_url),),
+        )
+        return replace(
+            self,
+            events=(*self.events, event),
+            draft_pr_url=draft_pr_url,
+        )
+
 
 class WorkRunState(StrEnum):
     """A stable state in the governed work-run lifecycle."""
