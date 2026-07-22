@@ -78,3 +78,20 @@ def test_happy_path_completes_after_recording_a_draft_pr() -> None:
     assert completed.state is WorkRunState.COMPLETED
     assert completed.draft_pr_url == "https://github.com/horonomy/GearMeshing-AI/pull/2"
     assert tuple(event.sequence for event in completed.events) == tuple(range(1, 7))
+
+
+def test_verification_can_cycle_through_remediation() -> None:
+    run = _advance(
+        _approved(),
+        WorkRunState.EXECUTING,
+        WorkRunState.VERIFYING,
+        WorkRunState.REMEDIATING,
+        WorkRunState.VERIFYING,
+    )
+
+    assert run.state is WorkRunState.VERIFYING
+    assert [event.state for event in run.events[-3:]] == [
+        WorkRunState.VERIFYING,
+        WorkRunState.REMEDIATING,
+        WorkRunState.VERIFYING,
+    ]
