@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from ipaddress import ip_address
 from math import isfinite
 from types import MappingProxyType
 from unicodedata import category
@@ -30,6 +32,7 @@ _SENSITIVE_METADATA_KEYS = frozenset(
         "token",
     }
 )
+_HOST_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
 
 def _required_text(value: str, field: str, *, max_length: int = 256) -> str:
@@ -59,12 +62,25 @@ def _optional_text(value: str, field: str, *, max_length: int) -> str:
 def _https_url_without_credentials(value: str, field: str) -> str:
     normalized = _required_text(value, field, max_length=2048)
     parsed = urlsplit(normalized)
+    try:
+        _ = parsed.port
+    except ValueError as error:
+        raise ValueError(f"{field} contains an invalid port") from error
     if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError(f"{field} must be an absolute HTTPS URL")
     if parsed.username is not None or parsed.password is not None:
         raise ValueError(f"{field} must not contain credentials")
     if parsed.query or parsed.fragment:
         raise ValueError(f"{field} must not contain a query or fragment")
+    hostname = parsed.hostname
+    try:
+        ip_address(hostname)
+    except ValueError:
+        labels = hostname.split(".")
+        if len(hostname) > 253 or any(_HOST_LABEL.fullmatch(label) is None for label in labels):
+            raise ValueError(f"{field} contains an invalid hostname") from None
+    if any(character.isspace() for character in parsed.path):
+        raise ValueError(f"{field} path must not contain whitespace")
     return normalized
 
 
