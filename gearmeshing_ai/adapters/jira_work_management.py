@@ -215,6 +215,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                     auth=httpx.BasicAuth(self._configuration.email, self._configuration.api_token),
                     headers={"Accept": "application/json"},
                     timeout=self._configuration.timeout_seconds,
+                    follow_redirects=False,
                 ) as response:
                     if response.status_code == 429:
                         if attempt == self._configuration.max_rate_limit_retries:
