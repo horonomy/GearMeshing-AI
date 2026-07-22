@@ -195,6 +195,8 @@ class WorkItem:
         object.__setattr__(self, "acceptance_criteria", criteria)
         object.__setattr__(self, "status", _required_text(self.status, "status"))
         object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
+        if not isinstance(self.repository, RepositoryReference):
+            raise TypeError("repository must be RepositoryReference")
         normalized_labels = tuple(_required_text(label, "label") for label in self.labels)
         if len(set(normalized_labels)) != len(normalized_labels):
             raise ValueError("labels must not contain duplicates")
