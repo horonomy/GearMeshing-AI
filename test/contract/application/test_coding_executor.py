@@ -116,6 +116,23 @@ def test_repository_context_rejects_ambiguous_absolute_roots(unsafe_root: str) -
         )
 
 
+@pytest.mark.parametrize(
+    ("repository_root", "worktree_root"),
+    (
+        ("//server/repository", "/workspace/.worktrees/GMAI-20"),
+        ("/workspace/GearMeshing-AI", "//server/worktree"),
+    ),
+)
+def test_repository_context_rejects_double_slash_roots(repository_root: str, worktree_root: str) -> None:
+    with pytest.raises(ValueError, match="normalized absolute POSIX path"):
+        RepositoryContext(
+            repository_root=repository_root,
+            worktree_root=worktree_root,
+            base_ref="main",
+            branch="mvp1/GMAI-20/coding_executor_contract",
+        )
+
+
 @pytest.mark.parametrize("unsafe_ref", ("feature//name", "feature/../main", "feature@{one", "-danger"))
 def test_repository_context_rejects_unsafe_git_refs(unsafe_ref: str) -> None:
     with pytest.raises(ValueError, match="normalized Git ref"):
