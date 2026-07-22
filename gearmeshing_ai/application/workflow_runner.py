@@ -225,9 +225,9 @@ class WorkflowRunner:
         request = self._request(run, WorkflowStage.DRAFT_PR_PUBLICATION, 1)
         try:
             url = self._publisher.publish(request)
+            updated = run.record_draft_pr(url, actor_id=self._actor_id, occurred_at=self._next_time(run))
         except Exception:
             return self._fail(run, WorkflowStage.DRAFT_PR_PUBLICATION)
-        updated = run.record_draft_pr(url, actor_id=self._actor_id, occurred_at=self._next_time(run))
         return self._transition_from(run, updated, WorkRunState.COMPLETED)
 
     def _attach_all(self, run: WorkRun, artifacts: tuple[WorkRunArtifact, ...]) -> WorkRun:
