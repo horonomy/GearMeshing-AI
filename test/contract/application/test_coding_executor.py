@@ -333,4 +333,5 @@ def test_terminal_outcomes_cover_the_governed_execution_contract() -> None:
         TerminalOutcome.CANCELLED,
         TerminalOutcome.TIMED_OUT,
         TerminalOutcome.FAILED,
+        TerminalOutcome.RESOURCE_EXHAUSTED,
     }
