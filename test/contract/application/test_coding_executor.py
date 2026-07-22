@@ -197,6 +197,18 @@ def test_approved_specification_preserves_exact_multiline_content() -> None:
     assert specification.content == content
 
 
+def test_approved_specification_rejects_whitespace_only_content() -> None:
+    content = " \t\n "
+    with pytest.raises(ValueError, match="must not be empty"):
+        ApprovedSpecification(
+            issue_key="GMAI-20",
+            revision="revision-1",
+            content=content,
+            content_sha256=sha256(content.encode()).hexdigest(),
+            approved_by="account-1",
+        )
+
+
 async def test_executor_streams_ordered_events_and_returns_success() -> None:
     executor = FakeCodingExecutor(
         capabilities=make_capabilities(),
