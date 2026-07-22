@@ -184,6 +184,19 @@ def test_approved_specification_rejects_content_digest_mismatch() -> None:
         )
 
 
+def test_approved_specification_preserves_exact_multiline_content() -> None:
+    content = "  Approved heading\n\nApproved body.\n"
+    specification = ApprovedSpecification(
+        issue_key="GMAI-20",
+        revision="revision-1",
+        content=content,
+        content_sha256=sha256(content.encode()).hexdigest(),
+        approved_by="account-1",
+    )
+
+    assert specification.content == content
+
+
 async def test_executor_streams_ordered_events_and_returns_success() -> None:
     executor = FakeCodingExecutor(
         capabilities=make_capabilities(),
