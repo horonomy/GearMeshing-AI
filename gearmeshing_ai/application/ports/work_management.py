@@ -6,6 +6,26 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from urllib.parse import urlsplit
+
+
+def _required_text(value: str, field: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field} must not be empty")
+    return normalized
+
+
+def _https_url_without_credentials(value: str, field: str) -> str:
+    normalized = _required_text(value, field)
+    parsed = urlsplit(normalized)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError(f"{field} must be an absolute HTTPS URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError(f"{field} must not contain credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError(f"{field} must not contain a query or fragment")
+    return normalized
 
 
 class WorkManagementCapability(StrEnum):
@@ -43,6 +63,22 @@ class ProviderCapabilities:
     def require(self, provider: str, capability: WorkManagementCapability) -> None:
         if not self.supports(capability):
             raise UnsupportedCapabilityError(provider, capability)
+
+
+@dataclass(frozen=True, slots=True)
+class RepositoryReference:
+    """Credential-free repository identity associated with a work item."""
+
+    provider: str
+    owner: str
+    name: str
+    web_url: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "provider", _required_text(self.provider, "provider"))
+        object.__setattr__(self, "owner", _required_text(self.owner, "owner"))
+        object.__setattr__(self, "name", _required_text(self.name, "name"))
+        object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
 
 
 class WorkManagementProvider(ABC):
