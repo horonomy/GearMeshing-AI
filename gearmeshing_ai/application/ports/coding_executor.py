@@ -111,3 +111,33 @@ class EventKind(StrEnum):
     TOOL_FINISHED = "tool_finished"
     ARTIFACT = "artifact"
     TERMINAL = "terminal"
+
+
+@dataclass(frozen=True, slots=True)
+class RepositoryContext:
+    """Repository and isolated worktree locations for one execution."""
+
+    repository_root: str
+    worktree_root: str
+    base_ref: str
+    branch: str
+    writable_paths: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        repository_root = PurePosixPath(_required_text(self.repository_root, "repository_root", maximum=1024))
+        worktree_root = PurePosixPath(_required_text(self.worktree_root, "worktree_root", maximum=1024))
+        if not repository_root.is_absolute() or not worktree_root.is_absolute():
+            raise ValueError("repository and worktree roots must be absolute POSIX paths")
+        if repository_root == worktree_root:
+            raise ValueError("worktree_root must be isolated from repository_root")
+        if repository_root in worktree_root.parents or worktree_root in repository_root.parents:
+            raise ValueError("repository and worktree roots must not contain one another")
+
+        paths = tuple(_relative_path(path, "writable path") for path in self.writable_paths)
+        if len(paths) != len(set(paths)):
+            raise ValueError("writable_paths must not contain duplicates")
+        object.__setattr__(self, "repository_root", repository_root.as_posix())
+        object.__setattr__(self, "worktree_root", worktree_root.as_posix())
+        object.__setattr__(self, "base_ref", _identifier(self.base_ref, "base_ref"))
+        object.__setattr__(self, "branch", _required_text(self.branch, "branch", maximum=256))
+        object.__setattr__(self, "writable_paths", paths)
