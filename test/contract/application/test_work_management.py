@@ -149,3 +149,21 @@ def test_metadata_rejects_sensitive_keys_at_any_depth(key: str) -> None:
 def test_metadata_rejects_non_serializable_values(value: object) -> None:
     with pytest.raises((TypeError, ValueError)):
         Metadata({"value": value})
+
+
+def test_work_item_defensively_freezes_labels() -> None:
+    labels = ["mvp-1"]
+    item = WorkItem(
+        key=" GMAI-16 ",
+        title=" Contract ",
+        description=" Approved specification ",
+        status=" In Progress ",
+        web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
+        repository=repository(),
+        labels=labels,  # type: ignore[arg-type]
+    )
+
+    labels.append("changed")
+
+    assert item.key == "GMAI-16"
+    assert item.labels == ("mvp-1",)
