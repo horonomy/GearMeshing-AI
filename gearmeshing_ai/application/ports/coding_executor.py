@@ -20,7 +20,7 @@ _ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _COMMAND_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 _SENSITIVE_KEY_PARTS = frozenset(
-    {"authorization", "bearer", "cookie", "credential", "password", "secret", "session", "token"}
+    {"authorization", "bearer", "cookie", "credential", "passwd", "password", "secret", "session", "token"}
 )
 _PROTECTED_BRANCHES = frozenset({"main", "master"})
 
@@ -109,6 +109,11 @@ def _local_branch(value: str) -> str:
 
 
 def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
+    """Canonicalize safe keys and snapshot scalar metadata.
+
+    Values are structurally validated but are not secret-scanned. Callers must
+    redact credential material upstream.
+    """
     snapshot: dict[str, MetadataValue] = {}
     for raw_key, value in metadata.items():
         key_text = _required_text(raw_key, "metadata key", maximum=64)
@@ -117,9 +122,14 @@ def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
         if not key:
             raise ValueError("metadata key must contain letters or digits")
         parts = frozenset(key.split("_"))
-        key_bearing_secret = "key" in parts and bool(parts & {"access", "api", "private"})
-        collapsed_key = key.replace("_", "")
-        if parts & _SENSITIVE_KEY_PARTS or key_bearing_secret or collapsed_key in {"accesskey", "apikey", "privatekey"}:
+        base_parts = frozenset(re.sub(r"\d+$", "", part) for part in parts)
+        key_bearing_secret = "key" in base_parts and bool(base_parts & {"access", "api", "private"})
+        collapsed_key = re.sub(r"\d+$", "", key.replace("_", ""))
+        if (
+            base_parts & _SENSITIVE_KEY_PARTS
+            or key_bearing_secret
+            or collapsed_key in {"accesskey", "apikey", "privatekey"}
+        ):
             raise ValueError(f"metadata key {key_text!r} may contain credentials")
         if key in snapshot:
             raise ValueError(f"metadata keys normalize to duplicate {key!r}")
