@@ -160,6 +160,7 @@ class WorkItem:
     key: str
     title: str
     description: str
+    acceptance_criteria: tuple[str, ...]
     status: str
     web_url: str
     repository: RepositoryReference
@@ -174,6 +175,13 @@ class WorkItem:
             "description",
             _required_text(self.description, "description", max_length=50_000),
         )
+        criteria = tuple(
+            _required_text(criterion, "acceptance criterion", max_length=2_000)
+            for criterion in self.acceptance_criteria
+        )
+        if len(criteria) != len(set(criteria)):
+            raise ValueError("acceptance_criteria must not contain duplicates")
+        object.__setattr__(self, "acceptance_criteria", criteria)
         object.__setattr__(self, "status", _required_text(self.status, "status"))
         object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
         normalized_labels = tuple(_required_text(label, "label") for label in self.labels)
