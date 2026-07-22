@@ -216,10 +216,13 @@ class WorkflowRunner:
         request = self._request(run, WorkflowStage.VERIFICATION, attempt)
         try:
             result = self._verifier.verify(request)
+            if not isinstance(result, VerificationResult):
+                raise TypeError("verifier must return VerificationResult")
             updated = self._attach_all(run, result.artifacts)
+            passed = result.passed
         except Exception:
             return self._fail(run, WorkflowStage.VERIFICATION)
-        if result.passed:
+        if passed:
             return self._transition_from(run, updated, WorkRunState.PUBLISHING_DRAFT_PR)
         if attempt > self._max_remediation_cycles:
             return self._fail_from(run, updated, WorkflowStage.VERIFICATION, "remediation_limit_reached")
