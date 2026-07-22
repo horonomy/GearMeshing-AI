@@ -112,6 +112,17 @@ def test_invalid_transition_is_rejected_without_changing_the_run() -> None:
     assert len(approved.events) == 1
 
 
+def test_transition_rejects_a_timestamp_earlier_than_existing_evidence() -> None:
+    approved = _approved()
+
+    with pytest.raises(WorkRunValidationError, match="timestamps must be monotonic"):
+        approved.transition_to(
+            WorkRunState.EXECUTING,
+            actor_id="agent-assembly",
+            occurred_at=NOW - timedelta(seconds=1),
+        )
+
+
 @pytest.mark.parametrize(
     "terminal_state",
     [WorkRunState.FAILED, WorkRunState.BLOCKED, WorkRunState.CANCELLED],
