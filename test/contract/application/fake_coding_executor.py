@@ -90,6 +90,15 @@ class FakeExecutionSession:
                 ExecutionEvent(index, EventKind.PROGRESS, message)
                 for index, message in enumerate(self._progress_messages, start=2)
             )
+            events.extend(
+                ExecutionEvent(
+                    len(events) + 1,
+                    EventKind.ARTIFACT,
+                    f"Produced artifact {artifact.relative_path}",
+                    artifact=artifact,
+                )
+                for artifact in self._artifacts
+            )
         terminal_outcome = TerminalOutcome.CANCELLED if self._cancel_reason is not None else self._outcome
         events.append(
             ExecutionEvent(
