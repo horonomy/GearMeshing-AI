@@ -1,3 +1,4 @@
+from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 
 import pytest
@@ -98,3 +99,11 @@ def test_capabilities_are_defensively_frozen() -> None:
     source.add(WorkManagementCapability.COMPLETE_WORK)
 
     assert capabilities.values == frozenset({WorkManagementCapability.READ_WORK_ITEM})
+
+
+def test_repository_reference_is_an_immutable_horonomy_identity() -> None:
+    value = repository()
+
+    assert value.web_url == "https://github.com/horonomy/GearMeshing-AI"
+    with pytest.raises(FrozenInstanceError):
+        value.name = "changed"  # type: ignore[misc]
