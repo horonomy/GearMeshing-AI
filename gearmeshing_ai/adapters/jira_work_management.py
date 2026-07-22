@@ -274,7 +274,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
     def _repository(self, properties: Mapping[str, object]) -> tuple[RepositoryReference, bool]:
         raw_repository = properties.get(_REPOSITORY_PROPERTY)
         if raw_repository is None:
-            return self._configuration.repository, False
+            return self._configuration.repository, True
         repository = self._object(raw_repository, "repository property")
         try:
             parsed = RepositoryReference(
