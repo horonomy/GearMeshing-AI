@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from base64 import b64encode
@@ -462,6 +463,38 @@ async def test_idempotency_key_reuse_across_capabilities_fails_explicitly() -> N
                 details="Await approval",
             )
         )
+
+
+async def test_parallel_first_writes_expose_documented_jira_check_post_boundary() -> None:
+    get_count = 0
+    post_count = 0
+    both_checked = asyncio.Event()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal get_count, post_count
+        if request.method == "GET":
+            get_count += 1
+            if get_count == 2:
+                both_checked.set()
+            await both_checked.wait()
+            return httpx.Response(200, json={"comments": [], "total": 0})
+        post_count += 1
+        return httpx.Response(201, json={"id": str(post_count), "created": "2026-07-22T05:01:00Z"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = JiraWorkManagementProvider(configuration(allow_writes=True), client=client)
+    update = ProgressUpdate(
+        work_item_key="GMAI-17",
+        idempotency_key="run-1:parallel",
+        summary="Concurrent first write",
+        percent_complete=50,
+    )
+
+    await asyncio.gather(adapter.update_progress(update), adapter.update_progress(update))
+
+    # Jira v3 has no conditional transaction spanning the comment lookup and create calls.
+    assert get_count == 2
+    assert post_count == 2
 
 
 async def test_new_progress_write_posts_adf_with_an_idempotency_property() -> None:
