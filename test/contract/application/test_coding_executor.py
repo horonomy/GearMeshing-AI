@@ -91,6 +91,17 @@ def test_repository_context_rejects_unsafe_writable_paths(unsafe_path: str) -> N
         )
 
 
+@pytest.mark.parametrize("unsafe_root", ("/workspace/../secret", "/workspace//repository", "/"))
+def test_repository_context_rejects_ambiguous_absolute_roots(unsafe_root: str) -> None:
+    with pytest.raises(ValueError, match="normalized absolute POSIX path"):
+        RepositoryContext(
+            repository_root=unsafe_root,
+            worktree_root="/workspace/.worktrees/GMAI-20",
+            base_ref="main",
+            branch="mvp1/GMAI-20/coding_executor_contract",
+        )
+
+
 @pytest.mark.parametrize("unsafe_command", ("/bin/sh", "pytest;curl", "../ruff", "git status"))
 def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
     with pytest.raises(ValueError, match="without paths or shell syntax"):
