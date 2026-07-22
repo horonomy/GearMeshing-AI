@@ -252,3 +252,55 @@ def test_checkpoint_rejects_events_outside_the_governed_history() -> None:
 
     with pytest.raises(WorkflowIntegrityError, match="invalid same-state event"):
         runner.run(approved)
+
+
+def test_draft_pr_retry_reuses_its_key_and_records_one_url() -> None:
+    approved = _approved()
+    publishing = (
+        approved.transition_to(
+            WorkRunState.EXECUTING,
+            actor_id="agent-assembly",
+            occurred_at=START + timedelta(seconds=1),
+        )
+        .transition_to(
+            WorkRunState.VERIFYING,
+            actor_id="agent-assembly",
+            occurred_at=START + timedelta(seconds=2),
+        )
+        .transition_to(
+            WorkRunState.PUBLISHING_DRAFT_PR,
+            actor_id="agent-assembly",
+            occurred_at=START + timedelta(seconds=3),
+        )
+    )
+
+    class FailFirstCompletionSave(MemoryCheckpoints):
+        fail_next_completion = True
+
+        def save(self, *, expected: WorkRun | None, updated: WorkRun) -> None:
+            if updated.state is WorkRunState.COMPLETED and self.fail_next_completion:
+                self.fail_next_completion = False
+                raise RuntimeError("simulated checkpoint outage")
+            super().save(expected=expected, updated=updated)
+
+    checkpoints = FailFirstCompletionSave(publishing)
+    publisher = FakePublisher()
+    runner = WorkflowRunner(
+        checkpoints=checkpoints,
+        executor=FakeExecutor(),
+        verifier=FakeVerifier(),
+        remediator=FakeRemediator(),
+        publisher=publisher,
+        clock=TickingClock(START + timedelta(seconds=3)),
+    )
+
+    with pytest.raises(RuntimeError, match="checkpoint outage"):
+        runner.run(approved)
+    completed = runner.run(approved)
+
+    assert [request.idempotency_key for request in publisher.requests] == [
+        "work-run-13:draft_pr_publication:1",
+        "work-run-13:draft_pr_publication:1",
+    ]
+    assert sum(event.name == "draft_pr_recorded" for event in completed.events) == 1
+    assert completed.draft_pr_url == "https://github.com/horonomy/GearMeshing-AI/pull/3"
