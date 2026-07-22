@@ -254,3 +254,18 @@ class ExecutionRequest:
         object.__setattr__(self, "execution_id", _identifier(self.execution_id, "execution_id"))
         object.__setattr__(self, "tool_grants", grants)
         object.__setattr__(self, "metadata", _frozen_metadata(self.metadata))
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEvent:
+    """Ordered, sanitized observation from an execution session."""
+
+    sequence: int
+    kind: EventKind
+    message: str
+    metadata: FrozenMetadata = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "sequence", _positive_int(self.sequence, "sequence"))
+        object.__setattr__(self, "message", _required_text(self.message, "message", maximum=2048))
+        object.__setattr__(self, "metadata", _frozen_metadata(self.metadata))
