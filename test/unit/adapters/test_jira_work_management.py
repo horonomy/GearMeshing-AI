@@ -13,6 +13,7 @@ from gearmeshing_ai.adapters.jira_errors import (
     JiraAuthenticationError,
     JiraAuthorizationError,
     JiraConfigurationError,
+    JiraIdempotencyConflictError,
     JiraRateLimitError,
     JiraResponseError,
 )
@@ -388,6 +389,42 @@ async def test_repeated_write_reuses_comment_with_matching_idempotency_property(
 
     assert receipt.provider_reference == "10001"
     assert requests == ["GET"]
+
+
+async def test_idempotency_key_reuse_with_changed_payload_fails_explicitly() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "comments": [
+                    {
+                        "id": "10001",
+                        "created": "2026-07-22T05:00:00Z",
+                        "properties": [
+                            {
+                                "key": "gearmeshing-ai.idempotency-key",
+                                "value": operation_binding(
+                                    "update_progress",
+                                    "GearMeshing-AI progress (50%): Original payload",
+                                    "run-1:progress:50",
+                                ),
+                            }
+                        ],
+                    }
+                ],
+                "total": 1,
+            },
+        )
+
+    with pytest.raises(JiraIdempotencyConflictError, match="different operation or payload"):
+        await provider(handler, allow_writes=True).update_progress(
+            ProgressUpdate(
+                work_item_key="GMAI-17",
+                idempotency_key="run-1:progress:50",
+                summary="Changed payload",
+                percent_complete=50,
+            )
+        )
 
 
 async def test_new_progress_write_posts_adf_with_an_idempotency_property() -> None:
