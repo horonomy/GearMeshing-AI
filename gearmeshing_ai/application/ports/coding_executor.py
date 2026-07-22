@@ -377,6 +377,14 @@ class ExecutionResult:
             raise ValueError("completed results must not include a failure")
         if self.outcome is not TerminalOutcome.COMPLETED and self.failure is None:
             raise ValueError("non-success results must include a failure")
+        required_categories = {
+            TerminalOutcome.CANCELLED: FailureCategory.CANCELLED,
+            TerminalOutcome.TIMED_OUT: FailureCategory.TIMEOUT,
+            TerminalOutcome.RESOURCE_EXHAUSTED: FailureCategory.RESOURCE,
+        }
+        required_category = required_categories.get(self.outcome)
+        if required_category is not None and self.failure is not None and self.failure.category is not required_category:
+            raise ValueError(f"{self.outcome.value} results require a {required_category.value} failure")
         object.__setattr__(self, "execution_id", _identifier(self.execution_id, "execution_id"))
         object.__setattr__(self, "events_emitted", events_emitted)
         object.__setattr__(self, "artifacts", artifacts)
