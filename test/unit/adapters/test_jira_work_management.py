@@ -676,6 +676,7 @@ async def test_completion_evidence_aggregate_is_bounded_before_network_access() 
 
     assert requests == 0
 
+
 async def test_blocked_readiness_result_can_be_posted_to_jira() -> None:
     posted: dict[str, object] = {}
 
