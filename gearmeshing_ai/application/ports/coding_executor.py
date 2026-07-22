@@ -163,3 +163,25 @@ class ApprovedSpecification:
         object.__setattr__(self, "revision", _identifier(self.revision, "revision"))
         object.__setattr__(self, "content_sha256", digest)
         object.__setattr__(self, "approved_by", _identifier(self.approved_by, "approved_by"))
+
+
+@dataclass(frozen=True, slots=True)
+class ToolGrant:
+    """Least-privilege operations and executables granted to one tool."""
+
+    tool: str
+    operations: frozenset[str]
+    commands: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        operations = frozenset(_identifier(operation, "operation") for operation in self.operations)
+        if not operations:
+            raise ValueError("operations must not be empty")
+        commands = tuple(_required_text(command, "command", maximum=64) for command in self.commands)
+        if any(_COMMAND_PATTERN.fullmatch(command) is None for command in commands):
+            raise ValueError("commands must be executable names without paths or shell syntax")
+        if len(commands) != len(set(commands)):
+            raise ValueError("commands must not contain duplicates")
+        object.__setattr__(self, "tool", _identifier(self.tool, "tool"))
+        object.__setattr__(self, "operations", operations)
+        object.__setattr__(self, "commands", commands)
