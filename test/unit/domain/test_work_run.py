@@ -174,3 +174,23 @@ def test_correlation_rejects_insecure_or_credentialed_urls(jira_url: str, reposi
             branch_name="mvp1/GMAI-11/workrun_state_model",
             agent_assembly_run_id="assembly-run-11",
         )
+
+
+def test_attaching_artifact_preserves_the_previous_aggregate() -> None:
+    executing = _advance(_approved(), WorkRunState.EXECUTING)
+    artifact = WorkRunArtifact(
+        artifact_id="test-report",
+        kind="verification",
+        uri="artifact://work-run-11/test-report",
+        sha256="a" * 64,
+    )
+
+    updated = executing.attach_artifact(
+        artifact,
+        actor_id="verification-agent",
+        occurred_at=NOW + timedelta(minutes=2),
+    )
+
+    assert executing.artifacts == ()
+    assert updated.artifacts == (artifact,)
+    assert updated.events[-1].details == (("artifact_id", "test-report"), ("kind", "verification"))
