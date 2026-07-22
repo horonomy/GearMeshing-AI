@@ -194,3 +194,16 @@ def test_attaching_artifact_preserves_the_previous_aggregate() -> None:
     assert executing.artifacts == ()
     assert updated.artifacts == (artifact,)
     assert updated.events[-1].details == (("artifact_id", "test-report"), ("kind", "verification"))
+
+
+@pytest.mark.parametrize(
+    "uri",
+    ["file:///tmp/report.json", "ftp://evidence.example/report.json", "artifact://user:secret@run/report"],
+)
+def test_artifacts_reject_disallowed_or_credentialed_uris(uri: str) -> None:
+    with pytest.raises(WorkRunValidationError):
+        WorkRunArtifact(
+            artifact_id="test-report",
+            kind="verification",
+            uri=uri,
+        )
