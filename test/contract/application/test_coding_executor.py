@@ -64,3 +64,10 @@ def make_request(
 
 def make_capabilities(*, cancellation: bool = True) -> ExecutorCapabilities:
     return ExecutorCapabilities(streaming=True, cancellation=cancellation, tool_names=frozenset({"shell"}))
+
+
+def test_fake_satisfies_provider_neutral_protocol() -> None:
+    executor: CodingExecutor = assert_executor_contract(FakeCodingExecutor(capabilities=make_capabilities()))
+
+    assert executor.capabilities.streaming is True
+    assert executor.capabilities.cancellation is True
