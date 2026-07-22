@@ -15,6 +15,7 @@ from gearmeshing_ai.application.ports.coding_executor import (
     ExecutionResult,
     ExecutorCapabilities,
     FailureCategory,
+    FailureMetadata,
     RepositoryContext,
     ResourceLimits,
     TerminalOutcome,
@@ -220,3 +221,22 @@ async def test_executor_start_is_idempotent_for_the_same_request() -> None:
     second = await executor.start(request)
 
     assert first is second
+
+
+def test_execution_result_supports_a_blocked_terminal_outcome() -> None:
+    request = make_request()
+    failure = FailureMetadata(
+        category=FailureCategory.POLICY,
+        code="approval_required",
+        message="A human approval checkpoint is required",
+    )
+
+    result = ExecutionResult(
+        execution_id=request.execution_id,
+        outcome=TerminalOutcome.BLOCKED,
+        limits=request.limits,
+        events_emitted=2,
+        failure=failure,
+    )
+
+    assert result.outcome is TerminalOutcome.BLOCKED
