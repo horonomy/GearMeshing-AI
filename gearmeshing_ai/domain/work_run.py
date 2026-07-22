@@ -202,6 +202,33 @@ class WorkRun:
         )
         return replace(self, state=target, events=(*self.events, event))
 
+    def attach_artifact(
+        self,
+        artifact: WorkRunArtifact,
+        *,
+        actor_id: str,
+        occurred_at: datetime,
+    ) -> WorkRun:
+        """Append evidence without mutating previously recorded evidence."""
+
+        if self.state in TERMINAL_STATES:
+            raise WorkRunValidationError("evidence cannot be attached to a terminal work run")
+        if any(existing.artifact_id == artifact.artifact_id for existing in self.artifacts):
+            raise WorkRunValidationError(f"artifact {artifact.artifact_id!r} is already attached")
+        event = WorkRunEvent(
+            sequence=len(self.events) + 1,
+            name="artifact_attached",
+            state=self.state,
+            actor_id=actor_id,
+            occurred_at=occurred_at,
+            details=(("artifact_id", artifact.artifact_id), ("kind", artifact.kind)),
+        )
+        return replace(
+            self,
+            events=(*self.events, event),
+            artifacts=(*self.artifacts, artifact),
+        )
+
 
 class WorkRunState(StrEnum):
     """A stable state in the governed work-run lifecycle."""
