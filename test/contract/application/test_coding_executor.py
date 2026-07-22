@@ -203,3 +203,12 @@ def test_execution_result_requires_failure_for_non_success_outcome() -> None:
             limits=request.limits,
             events_emitted=2,
         )
+
+
+async def test_executor_rejects_grants_outside_its_capabilities() -> None:
+    executor = FakeCodingExecutor(
+        capabilities=ExecutorCapabilities(streaming=True, cancellation=True, tool_names=frozenset())
+    )
+
+    with pytest.raises(ValueError, match="unsupported tool grants: shell"):
+        await executor.start(make_request())
