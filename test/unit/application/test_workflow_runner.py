@@ -151,3 +151,24 @@ def test_checkpoint_must_belong_to_the_requested_run() -> None:
 
     with pytest.raises(WorkflowIntegrityError, match="does not extend"):
         runner.run(approved)
+
+
+def test_runner_completes_deterministic_governed_stages() -> None:
+    approved = _approved()
+    checkpoints = MemoryCheckpoints()
+    runner, executor, verifier, remediator, publisher = _runner(
+        checkpoints,
+        executor=FakeExecutor((_artifact("implementation"),)),
+    )
+
+    completed = runner.run(approved)
+
+    assert completed.state.value == "completed"
+    assert completed.draft_pr_url == "https://github.com/horonomy/GearMeshing-AI/pull/3"
+    assert completed.correlation is approved.correlation
+    assert executor.requests[0].idempotency_key == "work-run-13:execution:1"
+    assert verifier.requests[0].artifacts == (_artifact("implementation"),)
+    assert verifier.requests[0].idempotency_key == "work-run-13:verification:1"
+    assert remediator.requests == []
+    assert publisher.requests[0].idempotency_key == "work-run-13:draft_pr_publication:1"
+    assert checkpoints.current == completed
