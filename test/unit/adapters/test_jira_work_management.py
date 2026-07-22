@@ -133,3 +133,13 @@ async def test_incomplete_issue_returns_actionable_blocking_diagnostics() -> Non
         "missing-acceptance-criteria",
         "missing-repository-context",
     }
+
+
+async def test_unsupported_issue_type_is_blocked() -> None:
+    adapter = provider(lambda _: httpx.Response(200, json=issue_payload(issue_type="Epic")))
+
+    item = await adapter.get_work_item("GMAI-17")
+    readiness = await adapter.evaluate_readiness(item)
+
+    assert [problem.code for problem in readiness.problems] == ["unsupported-issue-type"]
+    assert readiness.problems[0].details == "MVP 1 accepts Jira Story and Task issues only."
