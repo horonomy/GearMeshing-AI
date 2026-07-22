@@ -5,6 +5,7 @@ from __future__ import annotations
 from hashlib import sha256
 
 import pytest
+from fake_coding_executor import FakeCodingExecutor, assert_executor_contract
 
 from gearmeshing_ai.application.ports.coding_executor import (
     ApprovedSpecification,
@@ -21,7 +22,6 @@ from gearmeshing_ai.application.ports.coding_executor import (
     TerminalOutcome,
     ToolGrant,
 )
-from fake_coding_executor import FakeCodingExecutor, assert_executor_contract
 
 SPECIFICATION_CONTENT = "Implement the approved behavior and its verification."
 SPECIFICATION_DIGEST = sha256(SPECIFICATION_CONTENT.encode()).hexdigest()
