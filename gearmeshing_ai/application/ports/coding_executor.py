@@ -335,3 +335,37 @@ class ExecutionResult:
         object.__setattr__(self, "execution_id", _identifier(self.execution_id, "execution_id"))
         object.__setattr__(self, "events_emitted", events_emitted)
         object.__setattr__(self, "artifacts", artifacts)
+
+
+class ExecutionSession(Protocol):
+    """One running execution with a single ordered event stream."""
+
+    @property
+    def execution_id(self) -> str:
+        """Return the request identity represented by this session."""
+        ...
+
+    def events(self) -> AsyncIterator[ExecutionEvent]:
+        """Stream each event once in strictly increasing sequence order."""
+        ...
+
+    async def result(self) -> ExecutionResult:
+        """Wait for and return the stable terminal result."""
+        ...
+
+    async def cancel(self, reason: str) -> None:
+        """Request idempotent cancellation without exposing provider details."""
+        ...
+
+
+class CodingExecutor(Protocol):
+    """Port implemented by provider-specific governed coding adapters."""
+
+    @property
+    def capabilities(self) -> ExecutorCapabilities:
+        """Return immutable capabilities before an execution is started."""
+        ...
+
+    async def start(self, request: ExecutionRequest) -> ExecutionSession:
+        """Start one isolated execution or return its existing session."""
+        ...
