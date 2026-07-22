@@ -63,7 +63,7 @@ class FakeExecutionSession:
         sequence = 1
         yield ExecutionEvent(sequence, EventKind.STARTED, "Execution started")
         planned_events = len(self._progress_messages) + len(self._artifacts) + 2
-        if self._cancel_reason is None and planned_events > self._request.limits.max_events:
+        if not self._is_cancelled() and planned_events > self._request.limits.max_events:
             sequence += 1
             failure = FailureMetadata(
                 FailureCategory.RESOURCE,
@@ -84,14 +84,14 @@ class FakeExecutionSession:
                 {"outcome": self._result.outcome.value},
             )
             return
-        if self._cancel_reason is None:
+        if not self._is_cancelled():
             for message in self._progress_messages:
-                if self._cancel_reason is not None:
+                if self._is_cancelled():
                     break
                 sequence += 1
                 yield ExecutionEvent(sequence, EventKind.PROGRESS, message)
             for artifact in self._artifacts:
-                if self._cancel_reason is not None:
+                if self._is_cancelled():
                     break
                 sequence += 1
                 yield ExecutionEvent(
@@ -108,6 +108,9 @@ class FakeExecutionSession:
             "Execution reached a terminal outcome",
             {"outcome": self._result.outcome.value},
         )
+
+    def _is_cancelled(self) -> bool:
+        return self._cancel_reason is not None
 
     async def result(self) -> ExecutionResult:
         if self._result is None:
