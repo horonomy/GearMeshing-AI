@@ -82,6 +82,19 @@ class FakeProvider(WorkManagementProvider):
         return receipt(update.idempotency_key)
 
 
+class UnsupportedArtifactProvider(FakeProvider):
+    def __init__(self) -> None:
+        self.artifact_called = False
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(set(WorkManagementCapability) - {WorkManagementCapability.ATTACH_ARTIFACT})
+
+    async def _attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
+        self.artifact_called = True
+        return await super()._attach_artifact(update)
+
+
 def test_capabilities_raise_an_explicit_error_for_unsupported_operations() -> None:
     capabilities = ProviderCapabilities({WorkManagementCapability.READ_WORK_ITEM})
 
