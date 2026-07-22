@@ -102,3 +102,14 @@ def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
 def test_resource_limits_reject_non_finite_or_boolean_durations(unsafe_duration: float) -> None:
     with pytest.raises(ValueError, match="finite and positive"):
         ResourceLimits(unsafe_duration, max_events=1, max_artifacts=1, max_artifact_bytes=1)
+
+
+def test_request_defensively_snapshots_metadata() -> None:
+    metadata: dict[str, str | int | float | None] = {"attempt": 1}
+    request = make_request(metadata=metadata)
+
+    metadata["attempt"] = 2
+
+    assert request.metadata == {"attempt": 1}
+    with pytest.raises(TypeError):
+        request.metadata["attempt"] = 3  # type: ignore[index]
