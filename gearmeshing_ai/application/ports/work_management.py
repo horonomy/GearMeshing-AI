@@ -329,3 +329,31 @@ class WorkManagementProvider(ABC):
     @abstractmethod
     def capabilities(self) -> ProviderCapabilities:
         """Return the operations implemented by this provider."""
+
+    def require_capability(self, capability: WorkManagementCapability) -> None:
+        """Fail explicitly when orchestration requests an unsupported operation."""
+        self.capabilities.require(self.name, capability)
+
+    @abstractmethod
+    async def get_work_item(self, work_item_key: str) -> WorkItem:
+        """Load the current provider snapshot for a work item."""
+
+    @abstractmethod
+    async def evaluate_readiness(self, work_item: WorkItem) -> ReadinessResult:
+        """Evaluate whether the supplied work item is ready for execution."""
+
+    @abstractmethod
+    async def update_progress(self, update: ProgressUpdate) -> OperationReceipt:
+        """Publish execution progress."""
+
+    @abstractmethod
+    async def report_blocker(self, update: BlockerUpdate) -> OperationReceipt:
+        """Publish an actionable blocker."""
+
+    @abstractmethod
+    async def complete_work(self, update: CompletionUpdate) -> OperationReceipt:
+        """Mark work complete with reviewable evidence."""
+
+    @abstractmethod
+    async def attach_artifact(self, update: ArtifactUpdate) -> OperationReceipt:
+        """Attach a reviewable artifact."""
