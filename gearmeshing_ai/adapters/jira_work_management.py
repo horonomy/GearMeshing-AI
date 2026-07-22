@@ -302,6 +302,9 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             ),
             "issue",
         )
+        response_key = self._string(payload.get("key"), "issue key")
+        if response_key != key:
+            raise JiraResponseError("Jira returned an issue key that does not match the request")
         fields = self._object(payload.get("fields"), "issue fields")
         description_value = fields.get("description")
         parsed_description = parse_adf(description_value) if description_value is not None else None
@@ -323,7 +326,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         properties = self._object(payload.get("properties", {}), "issue properties")
         repository, repository_context_present = self._repository(properties)
         return WorkItem(
-            key=self._string(payload.get("key"), "issue key"),
+            key=response_key,
             title=self._string(fields.get("summary"), "summary"),
             description=description,
             acceptance_criteria=normalized_criteria,
