@@ -77,6 +77,8 @@ def _freeze_metadata(values: Mapping[str, object], path: str = "metadata") -> Ma
         if not isinstance(key, str):
             raise TypeError(f"{path} keys must be strings")
         normalized_key = _required_text(key, f"{path} key", max_length=128)
+        if normalized_key in frozen:
+            raise ValueError(f"{path} contains duplicate normalized key {normalized_key!r}")
         security_key = "".join(character for character in normalized_key.casefold() if character.isalnum())
         if any(marker in security_key for marker in _SENSITIVE_METADATA_KEYS):
             raise ValueError(f"{path} must not contain sensitive key {normalized_key!r}")
