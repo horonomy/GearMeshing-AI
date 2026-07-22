@@ -124,3 +124,14 @@ def test_request_rejects_credentials_and_unsafe_metadata_values(
 ) -> None:
     with pytest.raises(ValueError):
         make_request(metadata=unsafe_metadata)
+
+
+def test_approved_specification_rejects_content_digest_mismatch() -> None:
+    with pytest.raises(ValueError, match="does not match"):
+        ApprovedSpecification(
+            issue_key="GMAI-20",
+            revision="revision-1",
+            content=SPECIFICATION_CONTENT,
+            content_sha256="0" * 64,
+            approved_by="account-1",
+        )
