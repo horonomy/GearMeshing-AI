@@ -162,6 +162,12 @@ def test_request_defensively_snapshots_metadata() -> None:
         request.metadata["attempt"] = 3
 
 
+def test_request_canonicalizes_metadata_keys() -> None:
+    request = make_request(metadata={"Request ID": "request-1", "Retry-Count": 2})
+
+    assert request.metadata == {"request_id": "request-1", "retry_count": 2}
+
+
 @pytest.mark.parametrize(
     "unsafe_metadata",
     ({"api_token": "redacted"}, {"password_hint": "redacted"}, {"valid": float("nan")}, {"valid": True}),
