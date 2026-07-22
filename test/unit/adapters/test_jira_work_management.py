@@ -19,6 +19,7 @@ from gearmeshing_ai.adapters.jira_errors import (
 )
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import (
+    BlockerUpdate,
     ProgressUpdate,
     ReadinessProblem,
     ReadinessResult,
@@ -423,6 +424,42 @@ async def test_idempotency_key_reuse_with_changed_payload_fails_explicitly() -> 
                 idempotency_key="run-1:progress:50",
                 summary="Changed payload",
                 percent_complete=50,
+            )
+        )
+
+
+async def test_idempotency_key_reuse_across_capabilities_fails_explicitly() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "comments": [
+                    {
+                        "id": "10001",
+                        "created": "2026-07-22T05:00:00Z",
+                        "properties": [
+                            {
+                                "key": "gearmeshing-ai.idempotency-key",
+                                "value": operation_binding(
+                                    "update_progress",
+                                    "GearMeshing-AI progress (50%): Shared wording",
+                                    "run-1:shared-key",
+                                ),
+                            }
+                        ],
+                    }
+                ],
+                "total": 1,
+            },
+        )
+
+    with pytest.raises(JiraIdempotencyConflictError, match="different operation or payload"):
+        await provider(handler, allow_writes=True).report_blocker(
+            BlockerUpdate(
+                work_item_key="GMAI-17",
+                idempotency_key="run-1:shared-key",
+                summary="Shared wording",
+                details="Await approval",
             )
         )
 
