@@ -251,3 +251,13 @@ def test_execution_result_supports_a_blocked_terminal_outcome() -> None:
     )
 
     assert result.outcome is TerminalOutcome.BLOCKED
+
+
+def test_terminal_outcomes_cover_the_governed_execution_contract() -> None:
+    assert set(TerminalOutcome) == {
+        TerminalOutcome.COMPLETED,
+        TerminalOutcome.BLOCKED,
+        TerminalOutcome.CANCELLED,
+        TerminalOutcome.TIMED_OUT,
+        TerminalOutcome.FAILED,
+    }
