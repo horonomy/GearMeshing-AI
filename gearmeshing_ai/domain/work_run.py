@@ -141,6 +141,11 @@ class WorkRun:
             raise WorkRunValidationError("the first event must record approval")
         if tuple(event.sequence for event in self.events) != tuple(range(1, len(self.events) + 1)):
             raise WorkRunValidationError("event sequences must be contiguous")
+        for previous, current in zip(self.events, self.events[1:], strict=False):
+            if current.occurred_at < previous.occurred_at:
+                raise WorkRunValidationError("event timestamps must be monotonic")
+            if current.state is not previous.state and current.state not in ALLOWED_TRANSITIONS[previous.state]:
+                raise WorkRunValidationError("event history contains an invalid state transition")
         if self.events[-1].state is not self.state:
             raise WorkRunValidationError("the latest event state must match the work run state")
         artifact_ids = [artifact.artifact_id for artifact in self.artifacts]
