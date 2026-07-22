@@ -133,7 +133,7 @@ class FakeCodingExecutor:
         *,
         capabilities: ExecutorCapabilities,
         progress_messages: Iterable[str] = (),
-        outcome: TerminalOutcome = TerminalOutcome.SUCCEEDED,
+        outcome: TerminalOutcome = TerminalOutcome.COMPLETED,
         artifacts: Iterable[ExecutionArtifact] = (),
         failure: FailureMetadata | None = None,
     ) -> None:

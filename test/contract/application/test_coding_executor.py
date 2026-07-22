@@ -164,7 +164,7 @@ async def test_executor_streams_ordered_events_and_returns_success() -> None:
         EventKind.PROGRESS,
         EventKind.TERMINAL,
     ]
-    assert result.outcome is TerminalOutcome.SUCCEEDED
+    assert result.outcome is TerminalOutcome.COMPLETED
     assert result.events_emitted == len(events)
 
 
@@ -196,7 +196,7 @@ def test_execution_result_rejects_artifacts_over_the_byte_limit() -> None:
     with pytest.raises(ValueError, match="artifact bytes"):
         ExecutionResult(
             execution_id=request.execution_id,
-            outcome=TerminalOutcome.SUCCEEDED,
+            outcome=TerminalOutcome.COMPLETED,
             limits=request.limits,
             events_emitted=2,
             artifacts=(oversized,),

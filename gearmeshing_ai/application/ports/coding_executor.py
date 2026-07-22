@@ -90,7 +90,7 @@ def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
 class TerminalOutcome(StrEnum):
     """Finite terminal states reported by every execution."""
 
-    SUCCEEDED = "succeeded"
+    COMPLETED = "completed"
     BLOCKED = "blocked"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -335,9 +335,9 @@ class ExecutionResult:
             raise ValueError("artifacts exceeds max_artifacts")
         if sum(artifact.size_bytes for artifact in artifacts) > self.limits.max_artifact_bytes:
             raise ValueError("artifact bytes exceeds max_artifact_bytes")
-        if self.outcome is TerminalOutcome.SUCCEEDED and self.failure is not None:
-            raise ValueError("successful results must not include a failure")
-        if self.outcome is not TerminalOutcome.SUCCEEDED and self.failure is None:
+        if self.outcome is TerminalOutcome.COMPLETED and self.failure is not None:
+            raise ValueError("completed results must not include a failure")
+        if self.outcome is not TerminalOutcome.COMPLETED and self.failure is None:
             raise ValueError("non-success results must include a failure")
         object.__setattr__(self, "execution_id", _identifier(self.execution_id, "execution_id"))
         object.__setattr__(self, "events_emitted", events_emitted)
