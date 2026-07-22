@@ -235,7 +235,12 @@ class WorkRun:
             state=self.state,
             actor_id=actor_id,
             occurred_at=occurred_at,
-            details=(("artifact_id", artifact.artifact_id), ("kind", artifact.kind)),
+            details=(
+                ("artifact_id", artifact.artifact_id),
+                ("kind", artifact.kind),
+                ("uri", artifact.uri),
+                *((("sha256", artifact.sha256),) if artifact.sha256 is not None else ()),
+            ),
         )
         return replace(
             self,
