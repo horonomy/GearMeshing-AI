@@ -97,6 +97,17 @@ def _git_ref(value: str, name: str) -> str:
     return normalized
 
 
+def _local_branch(value: str) -> str:
+    normalized = _git_ref(value, "branch")
+    if normalized.startswith("refs/heads/"):
+        normalized = normalized.removeprefix("refs/heads/")
+    elif normalized.startswith("refs/"):
+        raise ValueError("branch must identify a local branch")
+    if normalized in {"@", "HEAD"}:
+        raise ValueError("branch must identify a local branch")
+    return _git_ref(normalized, "branch")
+
+
 def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
     snapshot: dict[str, MetadataValue] = {}
     for raw_key, value in metadata.items():
@@ -184,10 +195,9 @@ class RepositoryContext:
         object.__setattr__(self, "repository_root", repository_root.as_posix())
         object.__setattr__(self, "worktree_root", worktree_root.as_posix())
         base_ref = _git_ref(self.base_ref, "base_ref")
-        branch = _git_ref(self.branch, "branch")
+        branch = _local_branch(self.branch)
         base_branch = base_ref.removeprefix("refs/heads/")
-        work_branch = branch.removeprefix("refs/heads/")
-        if work_branch == base_branch or work_branch in _PROTECTED_BRANCHES:
+        if branch == base_branch or branch in _PROTECTED_BRANCHES:
             raise ValueError("branch must differ from the base and must not be protected")
         object.__setattr__(self, "base_ref", base_ref)
         object.__setattr__(self, "branch", branch)
