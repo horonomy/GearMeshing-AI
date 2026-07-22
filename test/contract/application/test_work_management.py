@@ -195,6 +195,23 @@ def test_work_item_defensively_freezes_labels() -> None:
     assert item.labels == ("mvp-1",)
 
 
+def test_work_item_normalizes_and_freezes_acceptance_criteria() -> None:
+    criteria = [" Contract tests pass. "]
+    item = WorkItem(
+        key="GMAI-16",
+        title="Contract",
+        description="Approved specification",
+        acceptance_criteria=criteria,  # type: ignore[arg-type]
+        status="In Progress",
+        web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
+        repository=repository(),
+    )
+
+    criteria.append("Late unapproved requirement")
+
+    assert item.acceptance_criteria == ("Contract tests pass.",)
+
+
 def test_readiness_is_derived_from_immutable_problems() -> None:
     problems = [ReadinessProblem(code="missing-approval", summary="Approval missing", details="Await owner approval")]
     blocked = ReadinessResult(work_item_key="GMAI-16", problems=problems)  # type: ignore[arg-type]
