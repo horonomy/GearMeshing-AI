@@ -120,6 +120,22 @@ def test_capabilities_reject_unknown_runtime_values() -> None:
         ProviderCapabilities({"read_work_item"})  # type: ignore[arg-type]
 
 
+async def test_provider_operations_fail_closed_before_unsupported_side_effects() -> None:
+    provider = UnsupportedArtifactProvider()
+    update = ArtifactUpdate(
+        work_item_key="GMAI-16",
+        idempotency_key="run-1:artifact:pr",
+        name="Draft PR",
+        kind="pull-request",
+        web_url="https://github.com/horonomy/GearMeshing-AI/pull/3",
+    )
+
+    with pytest.raises(UnsupportedCapabilityError, match="attach_artifact"):
+        await provider.attach_artifact(update)
+
+    assert provider.artifact_called is False
+
+
 def test_repository_reference_is_an_immutable_horonomy_identity() -> None:
     value = repository()
 
