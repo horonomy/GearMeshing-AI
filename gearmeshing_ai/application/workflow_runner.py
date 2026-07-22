@@ -48,6 +48,14 @@ class VerificationResult:
     passed: bool
     artifacts: tuple[WorkRunArtifact, ...] = ()
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.passed, bool):
+            raise TypeError("passed must be a boolean")
+        artifacts = tuple(self.artifacts)
+        if not all(isinstance(artifact, WorkRunArtifact) for artifact in artifacts):
+            raise TypeError("artifacts must contain only WorkRunArtifact values")
+        object.__setattr__(self, "artifacts", artifacts)
+
 
 class ExecutionPort(Protocol):
     """Execute the approved engineering change."""
