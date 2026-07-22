@@ -213,3 +213,14 @@ def test_completion_updates_require_secure_evidence(evidence_urls: tuple[str, ..
             summary="Contract delivered",
             evidence_urls=evidence_urls,
         )
+
+
+def test_artifact_updates_reject_credential_bearing_urls() -> None:
+    with pytest.raises(ValueError, match="credentials"):
+        ArtifactUpdate(
+            work_item_key="GMAI-16",
+            idempotency_key="run-1:artifact:pr",
+            name="Draft PR",
+            kind="pull-request",
+            web_url="https://token@github.com/horonomy/GearMeshing-AI/pull/1",
+        )
