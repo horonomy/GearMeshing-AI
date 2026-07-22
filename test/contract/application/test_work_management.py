@@ -85,7 +85,7 @@ def test_capabilities_raise_an_explicit_error_for_unsupported_operations() -> No
     capabilities = ProviderCapabilities({WorkManagementCapability.READ_WORK_ITEM})
 
     assert capabilities.supports(WorkManagementCapability.READ_WORK_ITEM)
-    with pytest.raises(UnsupportedCapabilityError, match="jira.*attach_artifact") as caught:
+    with pytest.raises(UnsupportedCapabilityError, match=r"jira.*attach_artifact") as caught:
         capabilities.require("jira", WorkManagementCapability.ATTACH_ARTIFACT)
 
     assert caught.value.provider == "jira"
