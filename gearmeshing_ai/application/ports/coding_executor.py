@@ -34,6 +34,16 @@ def _required_text(value: str, name: str, *, maximum: int = 512) -> str:
     return normalized
 
 
+def _required_exact_text(value: str, name: str, *, maximum: int) -> str:
+    if not value.strip():
+        raise ValueError(f"{name} must not be empty")
+    if len(value) > maximum:
+        raise ValueError(f"{name} must not exceed {maximum} characters")
+    if any(ord(character) < 32 and character not in "\t\n\r" for character in value):
+        raise ValueError(f"{name} must not contain unsupported control characters")
+    return value
+
+
 def _identifier(value: str, name: str) -> str:
     normalized = _required_text(value, name, maximum=128)
     if _IDENTIFIER_PATTERN.fullmatch(normalized) is None:
@@ -191,7 +201,7 @@ class ApprovedSpecification:
         digest = self.content_sha256.strip().lower()
         if _SHA256_PATTERN.fullmatch(digest) is None:
             raise ValueError("content_sha256 must be a lowercase SHA-256 digest")
-        content = _required_text(self.content, "content", maximum=1_000_000)
+        content = _required_exact_text(self.content, "content", maximum=1_000_000)
         if sha256(content.encode()).hexdigest() != digest:
             raise ValueError("content_sha256 does not match content")
         object.__setattr__(self, "issue_key", issue_key)
