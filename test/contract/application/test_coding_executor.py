@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from typing import cast
 
 import pytest
 from fake_coding_executor import FakeCodingExecutor, assert_executor_contract
@@ -112,6 +113,12 @@ def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
 def test_resource_limits_reject_non_finite_or_boolean_durations(unsafe_duration: float) -> None:
     with pytest.raises(ValueError, match="finite and positive"):
         ResourceLimits(unsafe_duration, max_events=1, max_artifacts=1, max_artifact_bytes=1)
+
+
+@pytest.mark.parametrize("unsafe_count", (True, 1.5, float("nan"), float("inf")))
+def test_resource_limits_reject_non_integral_counts(unsafe_count: object) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        ResourceLimits(1.0, max_events=cast("int", unsafe_count), max_artifacts=1, max_artifact_bytes=1)
 
 
 def test_request_defensively_snapshots_metadata() -> None:
