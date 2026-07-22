@@ -6,7 +6,27 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from math import isfinite
+from types import MappingProxyType
+from typing import TypeAlias
 from urllib.parse import urlsplit
+
+
+MetadataScalar: TypeAlias = str | int | float | bool | None
+MetadataValue: TypeAlias = MetadataScalar | tuple["MetadataValue", ...] | Mapping[str, "MetadataValue"]
+
+_SENSITIVE_METADATA_KEYS = frozenset(
+    {
+        "apikey",
+        "authorization",
+        "cookie",
+        "credential",
+        "password",
+        "privatekey",
+        "secret",
+        "token",
+    }
+)
 
 
 def _required_text(value: str, field: str) -> str:
@@ -26,6 +46,43 @@ def _https_url_without_credentials(value: str, field: str) -> str:
     if parsed.query or parsed.fragment:
         raise ValueError(f"{field} must not contain a query or fragment")
     return normalized
+
+
+def _freeze_metadata_value(value: object, path: str) -> MetadataValue:
+    if value is None or isinstance(value, str | int | bool):
+        return value
+    if isinstance(value, float):
+        if not isfinite(value):
+            raise ValueError(f"{path} must contain only finite numbers")
+        return value
+    if isinstance(value, Mapping):
+        return _freeze_metadata(value, path)
+    if isinstance(value, list | tuple):
+        return tuple(_freeze_metadata_value(item, f"{path}[]") for item in value)
+    raise TypeError(f"{path} contains unsupported metadata type {type(value).__name__!r}")
+
+
+def _freeze_metadata(values: Mapping[str, object], path: str = "metadata") -> Mapping[str, MetadataValue]:
+    frozen: dict[str, MetadataValue] = {}
+    for key, value in values.items():
+        if not isinstance(key, str):
+            raise TypeError(f"{path} keys must be strings")
+        normalized_key = _required_text(key, f"{path} key")
+        security_key = "".join(character for character in normalized_key.casefold() if character.isalnum())
+        if any(marker in security_key for marker in _SENSITIVE_METADATA_KEYS):
+            raise ValueError(f"{path} must not contain sensitive key {normalized_key!r}")
+        frozen[normalized_key] = _freeze_metadata_value(value, f"{path}.{normalized_key}")
+    return MappingProxyType(frozen)
+
+
+@dataclass(frozen=True, slots=True)
+class Metadata:
+    """Defensively copied, recursively immutable, credential-free metadata."""
+
+    values: Mapping[str, MetadataValue]
+
+    def __init__(self, values: Mapping[str, object] | None = None) -> None:
+        object.__setattr__(self, "values", _freeze_metadata(values or {}))
 
 
 class WorkManagementCapability(StrEnum):
