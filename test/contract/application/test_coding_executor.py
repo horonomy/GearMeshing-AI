@@ -191,3 +191,15 @@ def test_execution_result_rejects_artifacts_over_the_byte_limit() -> None:
             events_emitted=2,
             artifacts=(oversized,),
         )
+
+
+def test_execution_result_requires_failure_for_non_success_outcome() -> None:
+    request = make_request()
+
+    with pytest.raises(ValueError, match="must include a failure"):
+        ExecutionResult(
+            execution_id=request.execution_id,
+            outcome=TerminalOutcome.FAILED,
+            limits=request.limits,
+            events_emitted=2,
+        )
