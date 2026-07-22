@@ -146,3 +146,31 @@ def test_completion_without_a_draft_pr_is_rejected() -> None:
         )
 
     assert publishing.state is WorkRunState.PUBLISHING_DRAFT_PR
+
+
+@pytest.mark.parametrize(
+    ("jira_url", "repository_url"),
+    [
+        (
+            "http://lightning-dust-mite.atlassian.net/browse/GMAI-11",
+            "https://github.com/horonomy/GearMeshing-AI",
+        ),
+        (
+            "https://user:secret@lightning-dust-mite.atlassian.net/browse/GMAI-11",
+            "https://github.com/horonomy/GearMeshing-AI",
+        ),
+        (
+            "https://lightning-dust-mite.atlassian.net/browse/GMAI-11",
+            "https://token@github.com/horonomy/GearMeshing-AI",
+        ),
+    ],
+)
+def test_correlation_rejects_insecure_or_credentialed_urls(jira_url: str, repository_url: str) -> None:
+    with pytest.raises(WorkRunValidationError):
+        WorkRunCorrelation(
+            jira_issue_key="GMAI-11",
+            jira_issue_url=jira_url,
+            repository_url=repository_url,
+            branch_name="mvp1/GMAI-11/workrun_state_model",
+            agent_assembly_run_id="assembly-run-11",
+        )
