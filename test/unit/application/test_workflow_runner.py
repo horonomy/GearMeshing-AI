@@ -91,6 +91,8 @@ def _approved() -> WorkRun:
         correlation=WorkRunCorrelation(
             jira_issue_key="GMAI-13",
             jira_issue_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-13",
+            jira_issue_revision="1",
+            jira_issue_content_sha256="a" * 64,
             repository_url="https://github.com/horonomy/GearMeshing-AI",
             branch_name="mvp1/GMAI-13/workflow_runner",
             agent_assembly_run_id="assembly-run-13",
