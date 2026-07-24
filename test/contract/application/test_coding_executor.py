@@ -169,6 +169,42 @@ def test_repository_context_normalizes_full_local_branch_ref() -> None:
     assert repository.branch == "mvp1/GMAI-20/coding_executor_contract"
 
 
+def test_repository_context_accepts_an_immutable_commit_sha_as_base() -> None:
+    repository = RepositoryContext(
+        repository_root="/workspace/GearMeshing-AI",
+        worktree_root="/workspace/.worktrees/GMAI-20",
+        base_ref="A" * 40,
+        branch="mvp1/GMAI-20/coding_executor_contract",
+    )
+
+    assert repository.base_ref == "a" * 40
+
+
+@pytest.mark.parametrize(
+    "base_ref",
+    ("refs/tags/v1.0.0", "origin/main", "upstream/main", "HEAD", "@"),
+)
+def test_repository_context_rejects_tags_remotes_and_symbolic_base_refs(base_ref: str) -> None:
+    with pytest.raises(ValueError, match="local branch"):
+        RepositoryContext(
+            repository_root="/workspace/GearMeshing-AI",
+            worktree_root="/workspace/.worktrees/GMAI-20",
+            base_ref=base_ref,
+            branch="mvp1/GMAI-20/coding_executor_contract",
+        )
+
+
+@pytest.mark.parametrize("branch", ("origin/feature", "upstream/feature"))
+def test_repository_context_rejects_remote_tracking_branch_names(branch: str) -> None:
+    with pytest.raises(ValueError, match="local branch"):
+        RepositoryContext(
+            repository_root="/workspace/GearMeshing-AI",
+            worktree_root="/workspace/.worktrees/GMAI-20",
+            base_ref="main",
+            branch=branch,
+        )
+
+
 @pytest.mark.parametrize("pseudo_branch", ("HEAD", "@", "refs/tags/v1", "refs/remotes/origin/feature"))
 def test_repository_context_rejects_non_local_branch_refs(pseudo_branch: str) -> None:
     with pytest.raises(ValueError, match="local branch"):

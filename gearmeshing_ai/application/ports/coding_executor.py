@@ -18,11 +18,13 @@ type FrozenMetadata = Mapping[str, MetadataValue]
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+_COMMIT_SHA_PATTERN = re.compile(r"^[A-Fa-f0-9]{40}$")
 _COMMAND_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 _SENSITIVE_KEY_PARTS = frozenset(
     {"authorization", "bearer", "cookie", "credential", "passwd", "password", "secret", "session", "token"}
 )
 _PROTECTED_BRANCHES = frozenset({"main", "master"})
+_REMOTE_TRACKING_PREFIXES = ("origin/", "upstream/")
 
 
 def _required_text(value: str, name: str, *, maximum: int = 512) -> str:
@@ -109,9 +111,23 @@ def _local_branch(value: str) -> str:
         normalized = normalized.removeprefix("refs/heads/")
     elif normalized.startswith("refs/"):
         raise ValueError("branch must identify a local branch")
-    if normalized in {"@", "HEAD"}:
+    if normalized in {"@", "HEAD"} or normalized.startswith(_REMOTE_TRACKING_PREFIXES):
         raise ValueError("branch must identify a local branch")
     return _git_ref(normalized, "branch")
+
+
+def _base_ref(value: str) -> str:
+    """Accept only an immutable commit SHA or a local branch name.
+
+    Tags, remote-tracking refs, and other symbolic refs are rejected because
+    they can move or be deleted after this ``RepositoryContext`` is built,
+    which would let an execution silently start from a different base than
+    the one it was governed against.
+    """
+    normalized = value.strip()
+    if _COMMIT_SHA_PATTERN.fullmatch(normalized):
+        return normalized.lower()
+    return _local_branch(normalized)
 
 
 def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
@@ -230,10 +246,9 @@ class RepositoryContext:
             raise ValueError("writable_paths must not contain duplicates")
         object.__setattr__(self, "repository_root", repository_root.as_posix())
         object.__setattr__(self, "worktree_root", worktree_root.as_posix())
-        base_ref = _git_ref(self.base_ref, "base_ref")
+        base_ref = _base_ref(self.base_ref)
         branch = _local_branch(self.branch)
-        base_branch = base_ref.removeprefix("refs/heads/")
-        if branch == base_branch or branch in _PROTECTED_BRANCHES:
+        if branch == base_ref or branch in _PROTECTED_BRANCHES:
             raise ValueError("branch must differ from the base and must not be protected")
         object.__setattr__(self, "base_ref", base_ref)
         object.__setattr__(self, "branch", branch)
