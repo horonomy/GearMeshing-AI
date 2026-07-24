@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
+from unicodedata import category
 from urllib.parse import urlsplit
 
 
@@ -20,12 +21,44 @@ class InvalidTransitionError(WorkRunValidationError):
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
 _JIRA_ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+_GITHUB_PULL_PATH_PATTERN = re.compile(r"^/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>[1-9][0-9]*)/?$")
+_SENSITIVE_DETAIL_KEY_PARTS = frozenset(
+    {"authorization", "bearer", "cookie", "credential", "password", "secret", "session", "token"}
+)
 
 
 def _require_identifier(value: str, field_name: str) -> str:
     candidate = value.strip()
     if not _IDENTIFIER_PATTERN.fullmatch(candidate) or ".." in candidate:
         raise WorkRunValidationError(f"{field_name} is not a safe identifier")
+    return candidate
+
+
+def _require_github_pull_url(value: str, field_name: str, *, repository_url: str) -> str:
+    candidate = _require_safe_url(value, field_name, schemes=frozenset({"https"}))
+    parsed = urlsplit(candidate)
+    if parsed.hostname != "github.com":
+        raise WorkRunValidationError(f"{field_name} must be a github.com pull request URL")
+    match = _GITHUB_PULL_PATH_PATTERN.fullmatch(parsed.path)
+    if match is None:
+        raise WorkRunValidationError(f"{field_name} must reference a specific pull request number")
+    repository_path = urlsplit(repository_url).path.strip("/")
+    if f"{match['owner']}/{match['repo']}" != repository_path:
+        raise WorkRunValidationError(f"{field_name} must target this work run's correlated repository")
+    return candidate
+
+
+def _require_safe_detail_value(key: str, value: str) -> str:
+    normalized_key = "".join(character for character in key.casefold() if character.isalnum())
+    if any(marker in normalized_key for marker in _SENSITIVE_DETAIL_KEY_PARTS):
+        raise WorkRunValidationError(f"event detail key {key!r} may contain credentials")
+    candidate = value.strip()
+    if not candidate:
+        raise WorkRunValidationError("event detail values must not be blank")
+    if len(candidate) > 2048:
+        raise WorkRunValidationError("event detail values must not exceed 2048 characters")
+    if any(category(character).startswith("C") for character in candidate):
+        raise WorkRunValidationError("event detail values must not contain control characters")
     return candidate
 
 
@@ -43,10 +76,19 @@ def _require_safe_url(value: str, field_name: str, *, schemes: frozenset[str]) -
 
 @dataclass(frozen=True, slots=True)
 class WorkRunCorrelation:
-    """Stable external references used throughout a work run."""
+    """Stable external references used throughout a work run.
+
+    ``jira_issue_revision`` and ``jira_issue_content_sha256`` pin the exact
+    human-approved specification revision so a resumed run cannot silently
+    continue against a Jira description that changed after approval. The
+    approver identity and approval timestamp are captured by the mandatory
+    first ``approved`` event rather than duplicated here.
+    """
 
     jira_issue_key: str
     jira_issue_url: str
+    jira_issue_revision: str
+    jira_issue_content_sha256: str
     repository_url: str
     branch_name: str
     agent_assembly_run_id: str
@@ -61,6 +103,15 @@ class WorkRunCorrelation:
             "jira_issue_url",
             _require_safe_url(self.jira_issue_url, "jira_issue_url", schemes=frozenset({"https"})),
         )
+        object.__setattr__(
+            self,
+            "jira_issue_revision",
+            _require_identifier(self.jira_issue_revision, "jira_issue_revision"),
+        )
+        digest = self.jira_issue_content_sha256.strip().lower()
+        if not _SHA256_PATTERN.fullmatch(digest):
+            raise WorkRunValidationError("jira_issue_content_sha256 must be a lowercase hexadecimal SHA-256 digest")
+        object.__setattr__(self, "jira_issue_content_sha256", digest)
         object.__setattr__(
             self,
             "repository_url",
@@ -116,10 +167,11 @@ class WorkRunEvent:
         keys = [key for key, _ in self.details]
         if len(keys) != len(set(keys)):
             raise WorkRunValidationError("event detail keys must be unique")
-        for key, value in self.details:
-            _require_identifier(key, "event detail key")
-            if not value.strip():
-                raise WorkRunValidationError("event detail values must not be blank")
+        sanitized_details = tuple(
+            (_require_identifier(key, "event detail key"), _require_safe_detail_value(key, value))
+            for key, value in self.details
+        )
+        object.__setattr__(self, "details", sanitized_details)
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,7 +207,9 @@ class WorkRun:
             object.__setattr__(
                 self,
                 "draft_pr_url",
-                _require_safe_url(self.draft_pr_url, "draft_pr_url", schemes=frozenset({"https"})),
+                _require_github_pull_url(
+                    self.draft_pr_url, "draft_pr_url", repository_url=self.correlation.repository_url
+                ),
             )
         draft_pr_events = tuple(event for event in self.events if event.name == "draft_pr_recorded")
         if self.draft_pr_url is None and draft_pr_events:
@@ -261,7 +315,7 @@ class WorkRun:
             raise WorkRunValidationError("a Draft PR can only be recorded while publishing")
         if self.draft_pr_url is not None:
             raise WorkRunValidationError("the Draft PR URL has already been recorded")
-        draft_pr_url = _require_safe_url(url, "draft_pr_url", schemes=frozenset({"https"}))
+        draft_pr_url = _require_github_pull_url(url, "draft_pr_url", repository_url=self.correlation.repository_url)
         event = WorkRunEvent(
             sequence=len(self.events) + 1,
             name="draft_pr_recorded",

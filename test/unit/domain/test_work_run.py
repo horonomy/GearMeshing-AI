@@ -22,6 +22,8 @@ def _correlation() -> WorkRunCorrelation:
     return WorkRunCorrelation(
         jira_issue_key="GMAI-11",
         jira_issue_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-11",
+        jira_issue_revision="10",
+        jira_issue_content_sha256="a" * 64,
         repository_url="https://github.com/horonomy/GearMeshing-AI",
         branch_name="mvp1/GMAI-11/workrun_state_model",
         agent_assembly_run_id="assembly-run-11",
@@ -80,6 +82,27 @@ def test_happy_path_completes_after_recording_a_draft_pr() -> None:
     assert completed.state is WorkRunState.COMPLETED
     assert completed.draft_pr_url == "https://github.com/horonomy/GearMeshing-AI/pull/2"
     assert tuple(event.sequence for event in completed.events) == tuple(range(1, 7))
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/horonomy/GearMeshing-AI/pull/2",
+        "https://github.com/some-other-org/GearMeshing-AI/pull/2",
+        "https://github.com/horonomy/GearMeshing-AI/issues/2",
+        "https://github.com/horonomy/GearMeshing-AI",
+    ],
+)
+def test_record_draft_pr_rejects_urls_outside_the_correlated_repository(url: str) -> None:
+    publishing = _advance(
+        _approved(),
+        WorkRunState.EXECUTING,
+        WorkRunState.VERIFYING,
+        WorkRunState.PUBLISHING_DRAFT_PR,
+    )
+
+    with pytest.raises(WorkRunValidationError):
+        publishing.record_draft_pr(url, actor_id="coding-agent", occurred_at=NOW + timedelta(minutes=4))
 
 
 def test_verification_can_cycle_through_remediation() -> None:
@@ -217,7 +240,22 @@ def test_correlation_rejects_insecure_or_credentialed_urls(jira_url: str, reposi
         WorkRunCorrelation(
             jira_issue_key="GMAI-11",
             jira_issue_url=jira_url,
+            jira_issue_revision="10",
+            jira_issue_content_sha256="a" * 64,
             repository_url=repository_url,
+            branch_name="mvp1/GMAI-11/workrun_state_model",
+            agent_assembly_run_id="assembly-run-11",
+        )
+
+
+def test_correlation_rejects_a_malformed_content_digest() -> None:
+    with pytest.raises(WorkRunValidationError, match="content_sha256"):
+        WorkRunCorrelation(
+            jira_issue_key="GMAI-11",
+            jira_issue_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-11",
+            jira_issue_revision="10",
+            jira_issue_content_sha256="not-a-digest",
+            repository_url="https://github.com/horonomy/GearMeshing-AI",
             branch_name="mvp1/GMAI-11/workrun_state_model",
             agent_assembly_run_id="assembly-run-11",
         )
@@ -258,6 +296,50 @@ def test_artifacts_reject_disallowed_or_credentialed_uris(uri: str) -> None:
             artifact_id="test-report",
             kind="verification",
             uri=uri,
+        )
+
+
+@pytest.mark.parametrize(
+    "details",
+    [
+        (("api_token", "value"),),
+        (("authorization_header", "value"),),
+        (("session_cookie", "value"),),
+    ],
+)
+def test_event_rejects_sensitive_detail_keys(details: tuple[tuple[str, str], ...]) -> None:
+    with pytest.raises(WorkRunValidationError, match="credentials"):
+        WorkRunEvent(
+            sequence=1,
+            name="approved",
+            state=WorkRunState.APPROVED,
+            actor_id="human-product-owner",
+            occurred_at=NOW,
+            details=details,
+        )
+
+
+def test_event_rejects_detail_values_with_control_characters() -> None:
+    with pytest.raises(WorkRunValidationError, match="control characters"):
+        WorkRunEvent(
+            sequence=1,
+            name="approved",
+            state=WorkRunState.APPROVED,
+            actor_id="human-product-owner",
+            occurred_at=NOW,
+            details=(("note", "line-one\x00line-two"),),
+        )
+
+
+def test_event_rejects_detail_values_exceeding_the_length_bound() -> None:
+    with pytest.raises(WorkRunValidationError, match="2048 characters"):
+        WorkRunEvent(
+            sequence=1,
+            name="approved",
+            state=WorkRunState.APPROVED,
+            actor_id="human-product-owner",
+            occurred_at=NOW,
+            details=(("note", "x" * 2049),),
         )
 
 
