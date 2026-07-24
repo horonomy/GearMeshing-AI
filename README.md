@@ -20,3 +20,11 @@ uv run mypy gearmeshing_ai test
 ```
 
 The application version remains `0.0.0` throughout the MVP 1 proof of concept.
+
+## CLI
+
+The `gmai` command is installed with the project:
+
+```bash
+uv run gmai version
+```
