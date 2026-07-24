@@ -181,6 +181,17 @@ class RepositoryReference:
         object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
 
 
+def canonical_work_item_content(title: str, description: str, acceptance_criteria: tuple[str, ...]) -> str:
+    """Build the exact string that ``WorkItem.content_sha256`` must hash.
+
+    Both a `WorkManagementProvider` (when populating ``content_sha256``) and
+    a coding-executor caller (when building a matching approved
+    specification) must derive their digest from this same canonical
+    string, so the two boundaries agree on what "the approved content" is.
+    """
+    return "\n".join((title.strip(), description.strip(), *(criterion.strip() for criterion in acceptance_criteria)))
+
+
 @dataclass(frozen=True, slots=True)
 class WorkItem:
     """Provider-neutral snapshot of an approved unit of work.
@@ -189,7 +200,8 @@ class WorkItem:
     revision and normalized content this snapshot was read from, so
     execution can prove it ran the human-approved specification rather than
     a later edit. Providers populate ``revision`` from their own change
-    marker (for example a Jira ``updated`` timestamp or version number).
+    marker (for example a Jira ``updated`` timestamp or version number), and
+    must derive ``content_sha256`` from ``canonical_work_item_content``.
     """
 
     key: str
