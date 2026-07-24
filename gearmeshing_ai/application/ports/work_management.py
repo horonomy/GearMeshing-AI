@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from ipaddress import ip_address
@@ -192,7 +192,7 @@ class WorkItem:
     web_url: str
     repository: RepositoryReference | None
     labels: tuple[str, ...] = ()
-    metadata: Metadata = Metadata()
+    metadata: Metadata = field(default_factory=Metadata)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "key", _required_text(self.key, "key"))
@@ -228,7 +228,7 @@ class ReadinessProblem:
     code: str
     summary: str
     details: str
-    metadata: Metadata = Metadata()
+    metadata: Metadata = field(default_factory=Metadata)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "code", _required_text(self.code, "code"))
@@ -264,7 +264,7 @@ class ProgressUpdate:
     idempotency_key: str
     summary: str
     percent_complete: int
-    metadata: Metadata = Metadata()
+    metadata: Metadata = field(default_factory=Metadata)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
@@ -288,7 +288,7 @@ class BlockerUpdate:
     idempotency_key: str
     summary: str
     details: str
-    metadata: Metadata = Metadata()
+    metadata: Metadata = field(default_factory=Metadata)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
@@ -307,7 +307,7 @@ class CompletionUpdate:
     idempotency_key: str
     summary: str
     evidence_urls: tuple[str, ...]
-    metadata: Metadata = Metadata()
+    metadata: Metadata = field(default_factory=Metadata)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
@@ -332,7 +332,7 @@ class ArtifactUpdate:
     name: str
     kind: str
     web_url: str
-    metadata: Metadata = Metadata()
+    metadata: Metadata = field(default_factory=Metadata)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "work_item_key", _required_text(self.work_item_key, "work_item_key"))
@@ -353,7 +353,7 @@ class OperationReceipt:
     idempotency_key: str
     provider_reference: str
     accepted_at: datetime
-    metadata: Metadata = Metadata()
+    metadata: Metadata = field(default_factory=Metadata)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "provider", _required_text(self.provider, "provider"))
