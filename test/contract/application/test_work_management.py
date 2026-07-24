@@ -18,6 +18,7 @@ from gearmeshing_ai.application.ports.work_management import (
     WorkItem,
     WorkManagementCapability,
     WorkManagementProvider,
+    canonical_work_item_content,
 )
 
 
@@ -327,6 +328,16 @@ def test_work_item_rejects_a_malformed_content_digest() -> None:
             revision="1",
             content_sha256="not-a-digest",
         )
+
+
+def test_canonical_work_item_content_strips_and_joins_fields() -> None:
+    content = canonical_work_item_content(
+        " Contract ",
+        " Approved specification ",
+        (" Contract tests pass. ", " No regressions. "),
+    )
+
+    assert content == "Contract\nApproved specification\nContract tests pass.\nNo regressions."
 
 
 def test_readiness_is_derived_from_immutable_problems() -> None:
