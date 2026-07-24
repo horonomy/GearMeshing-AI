@@ -39,6 +39,8 @@ def work_item() -> WorkItem:
         status="In Progress",
         web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
         repository=repository(),
+        revision="1",
+        content_sha256="a" * 64,
         labels=("mvp-1",),
     )
 
@@ -218,6 +220,8 @@ def test_work_item_defensively_freezes_labels() -> None:
         status=" In Progress ",
         web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
         repository=repository(),
+        revision="1",
+        content_sha256="a" * 64,
         labels=labels,  # type: ignore[arg-type]
     )
 
@@ -237,6 +241,8 @@ def test_work_item_normalizes_and_freezes_acceptance_criteria() -> None:
         status="In Progress",
         web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
         repository=repository(),
+        revision="1",
+        content_sha256="a" * 64,
     )
 
     criteria.append("Late unapproved requirement")
@@ -253,6 +259,8 @@ def test_work_item_preserves_an_explicitly_missing_description() -> None:
         status="In Progress",
         web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
         repository=repository(),
+        revision="1",
+        content_sha256="a" * 64,
     )
 
     assert item.description == ""
@@ -268,6 +276,8 @@ def test_work_item_rejects_mutable_repository_values() -> None:
             status="In Progress",
             web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
             repository={"provider": "github"},  # type: ignore[arg-type]
+            revision="1",
+            content_sha256="a" * 64,
         )
 
 
@@ -280,9 +290,43 @@ def test_work_item_represents_missing_repository_context() -> None:
         status="In Progress",
         web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
         repository=None,
+        revision="1",
+        content_sha256="a" * 64,
     )
 
     assert item.repository is None
+
+
+def test_work_item_normalizes_the_content_digest_case() -> None:
+    item = WorkItem(
+        key="GMAI-16",
+        title="Contract",
+        description="Approved specification",
+        acceptance_criteria=(),
+        status="In Progress",
+        web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
+        repository=None,
+        revision=" 7 ",
+        content_sha256="A" * 64,
+    )
+
+    assert item.revision == "7"
+    assert item.content_sha256 == "a" * 64
+
+
+def test_work_item_rejects_a_malformed_content_digest() -> None:
+    with pytest.raises(ValueError, match="content_sha256"):
+        WorkItem(
+            key="GMAI-16",
+            title="Contract",
+            description="Approved specification",
+            acceptance_criteria=(),
+            status="In Progress",
+            web_url="https://lightning-dust-mite.atlassian.net/browse/GMAI-16",
+            repository=None,
+            revision="1",
+            content_sha256="not-a-digest",
+        )
 
 
 def test_readiness_is_derived_from_immutable_problems() -> None:

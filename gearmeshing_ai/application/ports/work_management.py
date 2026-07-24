@@ -33,6 +33,7 @@ _SENSITIVE_METADATA_KEYS = frozenset(
     }
 )
 _HOST_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+_SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 
 
 def _required_text(value: str, field: str, *, max_length: int = 256) -> str:
@@ -182,7 +183,14 @@ class RepositoryReference:
 
 @dataclass(frozen=True, slots=True)
 class WorkItem:
-    """Provider-neutral snapshot of an approved unit of work."""
+    """Provider-neutral snapshot of an approved unit of work.
+
+    ``revision`` and ``content_sha256`` identify the exact provider-side
+    revision and normalized content this snapshot was read from, so
+    execution can prove it ran the human-approved specification rather than
+    a later edit. Providers populate ``revision`` from their own change
+    marker (for example a Jira ``updated`` timestamp or version number).
+    """
 
     key: str
     title: str
@@ -191,6 +199,8 @@ class WorkItem:
     status: str
     web_url: str
     repository: RepositoryReference | None
+    revision: str
+    content_sha256: str
     labels: tuple[str, ...] = ()
     metadata: Metadata = field(default_factory=Metadata)
 
@@ -213,6 +223,11 @@ class WorkItem:
         object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
         if self.repository is not None and not isinstance(self.repository, RepositoryReference):
             raise TypeError("repository must be RepositoryReference or None")
+        object.__setattr__(self, "revision", _required_text(self.revision, "revision", max_length=128))
+        digest = self.content_sha256.strip().lower()
+        if not _SHA256_PATTERN.fullmatch(digest):
+            raise ValueError("content_sha256 must be a lowercase hexadecimal SHA-256 digest")
+        object.__setattr__(self, "content_sha256", digest)
         normalized_labels = tuple(_required_text(label, "label") for label in self.labels)
         if len(set(normalized_labels)) != len(normalized_labels):
             raise ValueError("labels must not contain duplicates")
