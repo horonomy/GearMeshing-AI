@@ -2,6 +2,9 @@
 
 Governed autonomous engineering teams powered by Agent Assembly.
 
+The importable package and CLI use the underscored name `gearmeshing_ai` (`import gearmeshing_ai`, `gmai` on the
+command line); this is the settled naming convention for MVP 1 and applies to every module.
+
 ## Development
 
 Requirements:
