@@ -42,10 +42,16 @@ stateDiagram-v2
 - Each transition returns a new aggregate and appends a contiguous audit event; historical events and artifacts remain
   unchanged.
 - `failed`, `blocked`, `cancelled`, and `completed` are terminal.
-- Completion is permitted only after an HTTPS, credential-free Draft PR URL is recorded while publishing.
+- Completion is permitted only after a Draft PR is recorded while publishing. The Draft PR URL must be an HTTPS
+  `github.com/<owner>/<repo>/pull/<number>` URL whose owner/repo matches the run's correlated repository.
 - Jira and repository references use credential-free HTTPS URLs. Artifact evidence uses only `https` or `artifact`
   URIs, with optional lowercase SHA-256 integrity metadata.
+- Correlation pins the exact human-approved Jira revision via `jira_issue_revision` and a normalized
+  `jira_issue_content_sha256` digest, so a resumed run cannot silently continue against a description that changed
+  after approval.
 - Branch, Jira issue, work-run, and Agent Assembly identifiers are validated once and remain stable for the run.
+- Event detail values are bounded to 2048 characters, rejected if they contain control characters, and rejected if
+  their key suggests a credential (for example `token`, `password`, `authorization`).
 
 Application services must supply actor IDs and timezone-aware timestamps explicitly. This keeps replay and tests
 deterministic and leaves clock, identity, persistence, and provider integrations outside the domain model.
