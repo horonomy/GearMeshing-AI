@@ -34,6 +34,7 @@ _SENSITIVE_METADATA_KEYS = frozenset(
 )
 _HOST_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+_METADATA_TYPE_ERROR = "metadata must be Metadata"
 
 
 def _required_text(value: str, field: str, *, max_length: int = 256) -> str:
@@ -245,7 +246,7 @@ class WorkItem:
             raise ValueError("labels must not contain duplicates")
         object.__setattr__(self, "labels", normalized_labels)
         if not isinstance(self.metadata, Metadata):
-            raise TypeError("metadata must be Metadata")
+            raise TypeError(_METADATA_TYPE_ERROR)
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,7 +263,7 @@ class ReadinessProblem:
         object.__setattr__(self, "summary", _required_text(self.summary, "summary", max_length=512))
         object.__setattr__(self, "details", _required_text(self.details, "details", max_length=10_000))
         if not isinstance(self.metadata, Metadata):
-            raise TypeError("metadata must be Metadata")
+            raise TypeError(_METADATA_TYPE_ERROR)
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,7 +305,7 @@ class ProgressUpdate:
         ):
             raise ValueError("percent_complete must be an integer from 0 through 100")
         if not isinstance(self.metadata, Metadata):
-            raise TypeError("metadata must be Metadata")
+            raise TypeError(_METADATA_TYPE_ERROR)
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,7 +324,7 @@ class BlockerUpdate:
         object.__setattr__(self, "summary", _required_text(self.summary, "summary", max_length=512))
         object.__setattr__(self, "details", _required_text(self.details, "details", max_length=10_000))
         if not isinstance(self.metadata, Metadata):
-            raise TypeError("metadata must be Metadata")
+            raise TypeError(_METADATA_TYPE_ERROR)
 
 
 @dataclass(frozen=True, slots=True)
@@ -347,7 +348,7 @@ class CompletionUpdate:
             raise ValueError("evidence_urls must not contain duplicates")
         object.__setattr__(self, "evidence_urls", evidence_urls)
         if not isinstance(self.metadata, Metadata):
-            raise TypeError("metadata must be Metadata")
+            raise TypeError(_METADATA_TYPE_ERROR)
 
 
 @dataclass(frozen=True, slots=True)
@@ -368,7 +369,7 @@ class ArtifactUpdate:
         object.__setattr__(self, "kind", _required_text(self.kind, "kind"))
         object.__setattr__(self, "web_url", _https_url_without_credentials(self.web_url, "web_url"))
         if not isinstance(self.metadata, Metadata):
-            raise TypeError("metadata must be Metadata")
+            raise TypeError(_METADATA_TYPE_ERROR)
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,7 +395,7 @@ class OperationReceipt:
         if self.accepted_at.tzinfo is None or self.accepted_at.utcoffset() is None:
             raise ValueError("accepted_at must be timezone-aware")
         if not isinstance(self.metadata, Metadata):
-            raise TypeError("metadata must be Metadata")
+            raise TypeError(_METADATA_TYPE_ERROR)
 
 
 class WorkManagementProvider(ABC):

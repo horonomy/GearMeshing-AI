@@ -398,13 +398,15 @@ def test_artifact_updates_reject_credential_bearing_urls() -> None:
 
 
 def test_operation_receipts_require_timezone_aware_timestamps() -> None:
+    naive_timestamp = datetime(2026, 7, 22)
+
     with pytest.raises(ValueError, match="timezone-aware"):
         OperationReceipt(
             provider="jira",
             work_item_key="GMAI-16",
             idempotency_key="run-1:progress:50",
             provider_reference="request-1",
-            accepted_at=datetime(2026, 7, 22),
+            accepted_at=naive_timestamp,
         )
 
 
