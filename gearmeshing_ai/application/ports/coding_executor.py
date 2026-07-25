@@ -16,13 +16,15 @@ type MetadataValue = str | int | float | None
 type FrozenMetadata = Mapping[str, MetadataValue]
 
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-_ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9][0-9]*$")
+_ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-[1-9]\d*$")
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _COMMIT_SHA_PATTERN = re.compile(r"^[A-Fa-f0-9]{40}$")
 _COMMAND_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
+_DIGITS = "0123456789"
 _SENSITIVE_KEY_PARTS = frozenset(
     {"authorization", "bearer", "cookie", "credential", "passwd", "password", "secret", "session", "token"}
 )
+_COLLAPSED_SECRET_KEYS = frozenset({"accesskey", "apikey", "privatekey"})
 _PROTECTED_BRANCHES = frozenset({"main", "master"})
 _REMOTE_TRACKING_PREFIXES = ("origin/", "upstream/")
 
@@ -130,6 +132,36 @@ def _base_ref(value: str) -> str:
     return _local_branch(normalized)
 
 
+def _canonical_metadata_key(raw_key: str) -> str:
+    key_text = _required_text(raw_key, "metadata key", maximum=64)
+    separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key_text)
+    key = re.sub(r"[^a-z0-9]+", "_", separated.casefold()).strip("_")
+    if not key:
+        raise ValueError("metadata key must contain letters or digits")
+    if _metadata_key_may_contain_credentials(key):
+        raise ValueError(f"metadata key {key_text!r} may contain credentials")
+    return key
+
+
+def _metadata_key_may_contain_credentials(key: str) -> bool:
+    base_parts = frozenset(part.rstrip(_DIGITS) for part in key.split("_"))
+    key_bearing_secret = "key" in base_parts and bool(base_parts & {"access", "api", "private"})
+    collapsed_key = key.replace("_", "").rstrip(_DIGITS)
+    return bool(base_parts & _SENSITIVE_KEY_PARTS) or key_bearing_secret or collapsed_key in _COLLAPSED_SECRET_KEYS
+
+
+def _validated_metadata_value(key: str, value: MetadataValue) -> MetadataValue:
+    if isinstance(value, bool):
+        raise ValueError(f"metadata value for {key!r} must not be boolean")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"metadata value for {key!r} must be finite")
+    if isinstance(value, str):
+        return _required_text(value, f"metadata value for {key!r}", maximum=1024)
+    if value is not None and not isinstance(value, (int, float)):
+        raise ValueError(f"metadata value for {key!r} has an unsupported type")
+    return value
+
+
 def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
     """Canonicalize safe keys and snapshot scalar metadata.
 
@@ -138,32 +170,10 @@ def _frozen_metadata(metadata: Mapping[str, MetadataValue]) -> FrozenMetadata:
     """
     snapshot: dict[str, MetadataValue] = {}
     for raw_key, value in metadata.items():
-        key_text = _required_text(raw_key, "metadata key", maximum=64)
-        separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key_text)
-        key = re.sub(r"[^a-z0-9]+", "_", separated.casefold()).strip("_")
-        if not key:
-            raise ValueError("metadata key must contain letters or digits")
-        parts = frozenset(key.split("_"))
-        base_parts = frozenset(re.sub(r"\d+$", "", part) for part in parts)
-        key_bearing_secret = "key" in base_parts and bool(base_parts & {"access", "api", "private"})
-        collapsed_key = re.sub(r"\d+$", "", key.replace("_", ""))
-        if (
-            base_parts & _SENSITIVE_KEY_PARTS
-            or key_bearing_secret
-            or collapsed_key in {"accesskey", "apikey", "privatekey"}
-        ):
-            raise ValueError(f"metadata key {key_text!r} may contain credentials")
+        key = _canonical_metadata_key(raw_key)
         if key in snapshot:
             raise ValueError(f"metadata keys normalize to duplicate {key!r}")
-        if isinstance(value, bool):
-            raise ValueError(f"metadata value for {key!r} must not be boolean")
-        if isinstance(value, float) and not math.isfinite(value):
-            raise ValueError(f"metadata value for {key!r} must be finite")
-        if isinstance(value, str):
-            value = _required_text(value, f"metadata value for {key!r}", maximum=1024)
-        elif value is not None and not isinstance(value, (int, float)):
-            raise ValueError(f"metadata value for {key!r} has an unsupported type")
-        snapshot[key] = value
+        snapshot[key] = _validated_metadata_value(key, value)
     return MappingProxyType(snapshot)
 
 

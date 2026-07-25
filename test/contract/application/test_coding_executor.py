@@ -77,13 +77,17 @@ def test_fake_satisfies_provider_neutral_protocol() -> None:
 
 
 def test_execution_event_rejects_string_kind_at_runtime() -> None:
+    untyped_kind = cast("EventKind", "started")
+
     with pytest.raises(ValueError, match="kind must be an EventKind"):
-        ExecutionEvent(1, cast("EventKind", "started"), "Started")
+        ExecutionEvent(1, untyped_kind, "Started")
 
 
 def test_execution_event_rejects_string_artifact_at_runtime() -> None:
+    untyped_artifact = cast("ExecutionArtifact", "artifact")
+
     with pytest.raises(ValueError, match="artifact must be an ExecutionArtifact"):
-        ExecutionEvent(1, EventKind.ARTIFACT, "Artifact", artifact=cast("ExecutionArtifact", "artifact"))
+        ExecutionEvent(1, EventKind.ARTIFACT, "Artifact", artifact=untyped_artifact)
 
 
 def test_repository_context_accepts_an_isolated_sibling_worktree() -> None:
@@ -230,8 +234,10 @@ def test_resource_limits_reject_non_finite_or_boolean_durations(unsafe_duration:
 
 @pytest.mark.parametrize("unsafe_count", (True, 1.5, float("nan"), float("inf")))
 def test_resource_limits_reject_non_integral_counts(unsafe_count: object) -> None:
+    untyped_count = cast("int", unsafe_count)
+
     with pytest.raises(ValueError, match="positive integer"):
-        ResourceLimits(1.0, max_events=cast("int", unsafe_count), max_artifacts=1, max_artifact_bytes=1)
+        ResourceLimits(1.0, max_events=untyped_count, max_artifacts=1, max_artifact_bytes=1)
 
 
 def test_resource_limits_reserve_started_and_terminal_events() -> None:
@@ -313,12 +319,14 @@ def test_approved_specification_preserves_exact_multiline_content() -> None:
 
 def test_approved_specification_rejects_whitespace_only_content() -> None:
     content = " \t\n "
+    content_sha256 = sha256(content.encode()).hexdigest()
+
     with pytest.raises(ValueError, match="must not be empty"):
         ApprovedSpecification(
             issue_key="GMAI-20",
             revision="revision-1",
             content=content,
-            content_sha256=sha256(content.encode()).hexdigest(),
+            content_sha256=content_sha256,
             approved_by="account-1",
         )
 
@@ -564,9 +572,10 @@ async def test_executor_rejects_grants_outside_its_capabilities() -> None:
     executor = FakeCodingExecutor(
         capabilities=ExecutorCapabilities(streaming=True, cancellation=True, tool_names=frozenset())
     )
+    request = make_request()
 
     with pytest.raises(ValueError, match="unsupported tool grants: shell"):
-        await executor.start(make_request())
+        await executor.start(request)
 
 
 async def test_executor_start_is_idempotent_for_the_same_request() -> None:
