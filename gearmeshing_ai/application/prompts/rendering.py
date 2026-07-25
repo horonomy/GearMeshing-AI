@@ -100,7 +100,10 @@ class PromptRegistry:
         self._environment = Environment(
             loader=FileSystemLoader(str(prompts_root)),
             undefined=StrictUndefined,
-            autoescape=False,  # prompts render plain text, not HTML
+            # These templates render plain text for an LLM prompt, never HTML for a browser, so
+            # there is no XSS surface here; HTML entity escaping would instead corrupt prompt
+            # content (e.g. quotes, ampersands in a diff or Jira description).
+            autoescape=False,  # NOSONAR
             keep_trailing_newline=True,
         )
         self._environment.filters["untrusted"] = wrap_untrusted
@@ -138,7 +141,10 @@ class PromptRegistry:
             if key in self._descriptors:
                 raise PromptValidationError(f"duplicate prompt registration for {key}")
             try:
-                template = self._environment.from_string(body)
+                # `body` is repository-authored prompt source (a tracked .md file under
+                # DEFAULT_PROMPTS_ROOT), not attacker-controlled HTML: this environment's
+                # autoescape=False above is a plain-text-prompt choice, not an HTML-injection risk.
+                template = self._environment.from_string(body)  # NOSONAR
             except TemplateSyntaxError as error:
                 raise PromptValidationError(f"{relative_path} has an invalid Jinja2 template: {error}") from error
             self._descriptors[key] = descriptor

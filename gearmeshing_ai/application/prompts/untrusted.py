@@ -32,8 +32,9 @@ import re
 
 _DELIMITER_OPEN = "<<<"
 _DELIMITER_CLOSE = ">>>"
-_ESCAPED_OPEN = "‹‹‹"  # noqa: RUF001 -- visually similar to "<<<", distinct code points
-_ESCAPED_CLOSE = "›››"  # noqa: RUF001 -- visually similar to ">>>", distinct code points
+# Visually similar to "<<<"/">>>" but distinct code points (U+2039/U+203A, tripled).
+_ESCAPED_OPEN = "‹‹‹"  # noqa: RUF001
+_ESCAPED_CLOSE = "›››"  # noqa: RUF001
 _LABEL_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 
 
