@@ -100,7 +100,7 @@ class JiraConfiguration:
     email: str = field(repr=False)
     api_token: str = field(repr=False, compare=False)
     project_key: str
-    repository: RepositoryReference | None = None
+    repository: RepositoryReference
     allow_writes: bool = False
     timeout_seconds: float = 15.0
     max_response_bytes: int = 1_000_000
@@ -116,8 +116,11 @@ class JiraConfiguration:
         if not _PROJECT_KEY.fullmatch(project_key):
             raise JiraConfigurationError("project_key must be an uppercase Jira project key")
         object.__setattr__(self, "project_key", project_key)
-        if self.repository is not None and not isinstance(self.repository, RepositoryReference):
-            raise JiraConfigurationError("repository must be a RepositoryReference or None")
+        if not isinstance(self.repository, RepositoryReference):
+            raise JiraConfigurationError(
+                "repository must be the trusted canonical RepositoryReference for this MVP; "
+                "a Jira issue property alone is not sufficient authorization"
+            )
         if not isinstance(self.allow_writes, bool):
             raise JiraConfigurationError("allow_writes must be a boolean")
         for name, value in (
@@ -301,11 +304,17 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             raise JiraResponseError(f"Jira returned invalid {context}") from error
         return parsed
 
-    def _repository(self, properties: Mapping[str, object]) -> tuple[RepositoryReference | None, bool]:
+    def _repository(self, properties: Mapping[str, object]) -> RepositoryReference:
+        """Return the trusted configured repository, verifying any issue-side declaration.
+
+        The configured repository is the sole source of authorization; a Jira
+        issue property is, at most, a redundant declaration that must match
+        it exactly. This is fail-closed: an issue can never redirect
+        execution to a repository the operator did not configure.
+        """
         raw_repository = properties.get(_REPOSITORY_PROPERTY)
         if raw_repository is None:
-            configured_repository = self._configuration.repository
-            return configured_repository, configured_repository is not None
+            return self._configuration.repository
         repository_property = self._object(raw_repository, "repository property")
         try:
             parsed = RepositoryReference(
@@ -316,9 +325,9 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             )
         except (TypeError, ValueError) as error:
             raise JiraResponseError("Jira repository property is invalid") from error
-        if self._configuration.repository is not None and parsed != self._configuration.repository:
+        if parsed != self._configuration.repository:
             raise JiraResponseError("Jira repository property does not match the configured repository")
-        return parsed, True
+        return parsed
 
     async def _get_work_item(self, work_item_key: str) -> WorkItem:
         key = self._validated_issue_key(work_item_key)
@@ -363,7 +372,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         status = self._object(fields.get("status"), "status")
         issue_type = self._object(fields.get("issuetype"), "issue type")
         properties = self._object(payload.get("properties", {}), "issue properties")
-        repository, repository_context_present = self._repository(properties)
+        repository = self._repository(properties)
         title = self._string(fields.get("summary"), "summary")
         revision = self._timestamp(fields.get("updated"), "updated").isoformat()
         content = canonical_work_item_content(title, description, normalized_criteria)
@@ -382,7 +391,6 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                 {
                     "description_present": description_present,
                     "issue_type": self._string(issue_type.get("name"), "issue type name"),
-                    "repository_context_present": repository_context_present,
                 }
             ),
         )

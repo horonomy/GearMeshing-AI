@@ -135,7 +135,6 @@ async def test_ready_issue_is_normalized_without_inventing_requirements() -> Non
 
     assert item.acceptance_criteria == ("It works",)
     assert item.repository == repository()
-    assert item.metadata.values["repository_context_present"] is True
     assert readiness.ready is True
 
 
@@ -180,7 +179,6 @@ async def test_incomplete_issue_returns_actionable_blocking_diagnostics() -> Non
 
     assert item.acceptance_criteria == ()
     assert item.repository == repository()
-    assert item.metadata.values["repository_context_present"] is True
     assert {problem.code for problem in readiness.problems} == {
         "spec-not-ready",
         "missing-acceptance-criteria",
@@ -217,18 +215,9 @@ async def test_jira_repository_property_cannot_override_approved_configuration()
         await adapter.get_work_item("GMAI-17")
 
 
-async def test_missing_configured_and_issue_repository_context_blocks_readiness() -> None:
-    adapter = provider(
-        lambda _: httpx.Response(200, json=issue_payload(include_repository=False)),
-        repository=None,
-    )
-
-    item = await adapter.get_work_item("GMAI-17")
-    readiness = await adapter.evaluate_readiness(item)
-
-    assert item.repository is None
-    assert item.metadata.values["repository_context_present"] is False
-    assert [problem.code for problem in readiness.problems] == ["missing-repository-context"]
+def test_configuration_requires_the_canonical_trusted_repository() -> None:
+    with pytest.raises(JiraConfigurationError, match="trusted canonical"):
+        configuration(repository=None)
 
 
 async def test_configured_repository_is_a_ready_fallback_without_issue_property() -> None:
@@ -238,18 +227,33 @@ async def test_configured_repository_is_a_ready_fallback_without_issue_property(
     readiness = await adapter.evaluate_readiness(item)
 
     assert item.repository == repository()
-    assert item.metadata.values["repository_context_present"] is True
     assert readiness.ready is True
 
 
-async def test_valid_issue_repository_is_used_without_configured_context() -> None:
-    adapter = provider(lambda _: httpx.Response(200, json=issue_payload()), repository=None)
+async def test_matching_issue_repository_property_is_a_redundant_declaration() -> None:
+    adapter = provider(lambda _: httpx.Response(200, json=issue_payload()))
 
     item = await adapter.get_work_item("GMAI-17")
     readiness = await adapter.evaluate_readiness(item)
 
     assert item.repository == repository()
     assert readiness.ready is True
+
+
+async def test_mismatched_issue_repository_property_is_rejected() -> None:
+    mismatched = issue_payload()
+    properties = mismatched["properties"]
+    assert isinstance(properties, dict)
+    properties["gearmeshing-ai.repository"] = {
+        "provider": "github",
+        "owner": "some-other-org",
+        "name": "GearMeshing-AI",
+        "webUrl": "https://github.com/some-other-org/GearMeshing-AI",
+    }
+    adapter = provider(lambda _: httpx.Response(200, json=mismatched))
+
+    with pytest.raises(JiraResponseError, match="does not match the configured repository"):
+        await adapter.get_work_item("GMAI-17")
 
 
 async def test_unsupported_issue_type_is_blocked() -> None:
