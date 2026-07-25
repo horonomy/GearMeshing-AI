@@ -1,0 +1,12 @@
+Synthetic fixture — not a real product, not for production use.
+
+This directory (fixtures/sample_service) contains a small, self-contained
+toy Python service used solely as a repeatable fixture for GearMeshing-AI's
+golden evaluation dataset (see ../golden_dataset). It contains no real
+business logic, no production code paths, no network calls, and no secrets
+or credentials of any kind.
+
+No license claim is made over this fixture. Treat it as public-domain-style
+sample code, freely usable for testing, evaluation, and CI purposes within
+this repository. It is independent from and has no runtime dependency on
+the gearmeshing_ai package.
