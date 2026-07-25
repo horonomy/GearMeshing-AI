@@ -102,14 +102,26 @@ def parse_adf(value: object, *, max_nodes: int = 4_096, max_characters: int = 50
 
 
 def paragraph_document(text: str) -> dict[str, JsonValue]:
-    """Build a minimal ADF paragraph after validating bounded caller text."""
+    """Build a minimal ADF paragraph after validating bounded caller text.
+
+    Embedded newlines are rendered as explicit ``hardBreak`` nodes rather
+    than left inside one text node, so Jira renders each line as a separate
+    line within the paragraph instead of collapsing them into one run.
+    """
     normalized = text.strip()
     if not normalized:
         raise ValueError("comment text must not be empty")
     if len(normalized) > 10_000:
         raise ValueError("comment text must not exceed 10000 characters")
+    lines = normalized.split("\n")
+    content: list[JsonValue] = []
+    for index, line in enumerate(lines):
+        if index > 0:
+            content.append({"type": "hardBreak"})
+        if line:
+            content.append({"type": "text", "text": line})
     return {
         "type": "doc",
         "version": 1,
-        "content": [{"type": "paragraph", "content": [{"type": "text", "text": normalized}]}],
+        "content": [{"type": "paragraph", "content": content}],
     }
