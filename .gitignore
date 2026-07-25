@@ -8,3 +8,8 @@ build/
 dist/
 *.egg-info/
 *.py[cod]
+
+# Local Docker Compose environment secrets (see .env.example)
+.env
+.env.*
+!.env.example
