@@ -1,0 +1,71 @@
+# Local Docker Compose environment for GearMeshing-AI (MVP 1 proof of concept).
+#
+# Start the required local dependencies with:
+#
+#   docker compose up -d
+#
+# See docs/local-environment.md for full usage, configuration, and known gaps.
+
+services:
+  postgres:
+    image: postgres:16.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gearmeshing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gearmeshing}
+      POSTGRES_DB: ${POSTGRES_DB:-gearmeshing}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gearmeshing} -d ${POSTGRES_DB:-gearmeshing}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  gearmeshing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database connection for the GearMeshing-AI CLI/library. No ORM/database dependency exists in
+      # gearmeshing_ai today; this is provisioned ahead of that work landing.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gearmeshing}:${POSTGRES_PASSWORD:-gearmeshing}@postgres:5432/${POSTGRES_DB:-gearmeshing}
+
+      # --- Agent Assembly runtime/gateway integration points (STUBBED — known gap) ---
+      # Agent Assembly has no runtime/gateway service or image in this repo yet. These variables are
+      # placeholders documenting the configuration surface a future gateway integration will need; they
+      # are read by nothing today. See docs/local-environment.md "Known gaps" section.
+      AGENT_ASSEMBLY_GATEWAY_URL: ${AGENT_ASSEMBLY_GATEWAY_URL:-}
+      AGENT_ASSEMBLY_GATEWAY_TOKEN: ${AGENT_ASSEMBLY_GATEWAY_TOKEN:-}
+
+      # Jira Cloud adapter configuration (gearmeshing_ai/adapters/jira_work_management.py).
+      JIRA_SITE_URL: ${JIRA_SITE_URL:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+    volumes:
+      # Mount a fixtures directory for E2E runs against golden datasets (see GMAI-38). The directory is
+      # optional and may be empty/absent locally; nothing in this repo depends on its contents yet.
+      - ${FIXTURES_DIR:-./fixtures}:/app/fixtures:ro
+
+  # Optional local observability profile — not required for `docker compose up -d`.
+  # Enable with: docker compose --profile observability up -d
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    restart: unless-stopped
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+
+volumes:
+  postgres_data:
