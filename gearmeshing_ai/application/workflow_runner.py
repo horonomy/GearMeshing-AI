@@ -8,12 +8,29 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
+from gearmeshing_ai.application.ports.coding_executor import (
+    ApprovedSpecification,
+    CodingExecutor,
+    ExecutionRequest,
+    ExecutionResult,
+    RepositoryContext,
+    ResourceLimits,
+    TerminalOutcome,
+    ToolGrant,
+)
+from gearmeshing_ai.application.ports.work_management import (
+    BlockerUpdate,
+    CompletionUpdate,
+    ReadinessResult,
+    WorkItem,
+    WorkManagementProvider,
+    canonical_work_item_content,
+)
 from gearmeshing_ai.domain.work_run import (
     ALLOWED_TRANSITIONS,
     TERMINAL_STATES,
     WorkRun,
     WorkRunArtifact,
-    WorkRunCorrelation,
     WorkRunState,
 )
 
@@ -33,16 +50,6 @@ class WorkflowStage(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class StageRequest:
-    """Immutable context supplied to one idempotent workflow operation."""
-
-    run_id: str
-    correlation: WorkRunCorrelation
-    artifacts: tuple[WorkRunArtifact, ...]
-    idempotency_key: str
-
-
-@dataclass(frozen=True, slots=True)
 class VerificationResult:
     """Evidence-backed result returned by the verification boundary."""
 
@@ -58,28 +65,22 @@ class VerificationResult:
         object.__setattr__(self, "artifacts", artifacts)
 
 
-class ExecutionPort(Protocol):
-    """Execute the approved engineering change."""
-
-    def execute(self, request: StageRequest) -> tuple[WorkRunArtifact, ...]: ...
-
-
 class VerificationPort(Protocol):
     """Verify the current change and return immutable evidence."""
 
-    def verify(self, request: StageRequest) -> VerificationResult: ...
+    async def verify(self, run: WorkRun) -> VerificationResult: ...
 
 
 class RemediationPort(Protocol):
     """Correct a failed verification attempt."""
 
-    def remediate(self, request: StageRequest) -> tuple[WorkRunArtifact, ...]: ...
+    async def remediate(self, run: WorkRun) -> tuple[WorkRunArtifact, ...]: ...
 
 
 class DraftPrPublisher(Protocol):
     """Publish or recover the single Draft PR for a work run."""
 
-    def publish(self, request: StageRequest) -> str: ...
+    async def publish(self, run: WorkRun) -> str: ...
 
 
 class WorkflowCheckpointStore(Protocol):
@@ -93,6 +94,21 @@ class WorkflowCheckpointStore(Protocol):
 Clock = Callable[[], datetime]
 
 
+@dataclass(frozen=True, slots=True)
+class ExecutionEnvironment:
+    """Repository isolation and least-privilege bounds for one work item.
+
+    Supplied by the caller per work item (not persisted on the domain
+    aggregate) because these are execution-infrastructure concerns - where
+    the isolated worktree lives, what the executor may touch, and how much
+    it may consume - rather than governance state.
+    """
+
+    repository: RepositoryContext
+    limits: ResourceLimits
+    tool_grants: tuple[ToolGrant, ...] = ()
+
+
 class WorkflowRunner:
     """Resume a work run from trusted checkpoints until it reaches a terminal state."""
 
@@ -100,7 +116,8 @@ class WorkflowRunner:
         self,
         *,
         checkpoints: WorkflowCheckpointStore,
-        executor: ExecutionPort,
+        work_management: WorkManagementProvider,
+        executor: CodingExecutor,
         verifier: VerificationPort,
         remediator: RemediationPort,
         publisher: DraftPrPublisher,
@@ -113,6 +130,7 @@ class WorkflowRunner:
         if max_remediation_cycles < 0:
             raise ValueError("max_remediation_cycles must not be negative")
         self._checkpoints = checkpoints
+        self._work_management = work_management
         self._executor = executor
         self._verifier = verifier
         self._remediator = remediator
@@ -121,25 +139,60 @@ class WorkflowRunner:
         self._actor_id = actor_id
         self._max_remediation_cycles = max_remediation_cycles
 
-    def run(self, approved: WorkRun) -> WorkRun:
+    async def run(self, approved: WorkRun, environment: ExecutionEnvironment) -> WorkRun:
         """Run or idempotently resume one pristine, human-approved work run."""
 
         self._validate_approved_input(approved)
+        work_item = await self._work_management.get_work_item(approved.correlation.jira_issue_key)
+        self._require_matching_approved_specification(approved, work_item)
+        readiness = await self._work_management.evaluate_readiness(work_item)
+        if not readiness.ready:
+            return await self._block_on_unready_work_item(approved, readiness)
         current = self._ingest(approved)
+        already_terminal = current.state in TERMINAL_STATES
         while current.state not in TERMINAL_STATES:
             if current.state is WorkRunState.APPROVED:
                 current = self._transition(current, WorkRunState.EXECUTING)
             elif current.state is WorkRunState.EXECUTING:
-                current = self._execute(current)
+                current = await self._execute(current, work_item, environment)
             elif current.state is WorkRunState.VERIFYING:
-                current = self._verify(current)
+                current = await self._verify(current)
             elif current.state is WorkRunState.REMEDIATING:
-                current = self._remediate(current)
+                current = await self._remediate(current)
             elif current.state is WorkRunState.PUBLISHING_DRAFT_PR:
-                current = self._publish(current)
+                current = await self._publish(current)
             else:  # pragma: no cover - WorkRunState is exhaustively handled above
                 raise WorkflowIntegrityError(f"unsupported checkpoint state: {current.state.value}")
+        if not already_terminal:
+            await self._report_outcome(current)
         return current
+
+    @staticmethod
+    def _require_matching_approved_specification(run: WorkRun, work_item: WorkItem) -> None:
+        """Fail closed if the Jira description changed after human approval."""
+        correlation = run.correlation
+        if (
+            work_item.revision != correlation.jira_issue_revision
+            or work_item.content_sha256 != correlation.jira_issue_content_sha256
+        ):
+            raise WorkflowIntegrityError(
+                "the work item's current revision no longer matches the run's approved specification"
+            )
+
+    async def _block_on_unready_work_item(self, approved: WorkRun, readiness: ReadinessResult) -> WorkRun:
+        checkpoint = self._checkpoints.load(approved.run_id)
+        if checkpoint is not None:
+            return checkpoint
+        summary = "; ".join(problem.summary for problem in readiness.problems)
+        blocked = approved.transition_to(
+            WorkRunState.BLOCKED,
+            actor_id=self._actor_id,
+            occurred_at=self._next_time(approved),
+            details=(("failure_code", "work_item_not_ready"), ("summary", summary)),
+        )
+        self._checkpoints.save(expected=None, updated=blocked)
+        await self._report_outcome(blocked)
+        return blocked
 
     def _ingest(self, approved: WorkRun) -> WorkRun:
         """Persist the approved input once, or resume its trusted checkpoint."""
@@ -204,50 +257,87 @@ class WorkflowRunner:
         ):
             raise WorkflowIntegrityError("checkpoint Draft PR does not match its audit event")
 
-    def _execute(self, run: WorkRun) -> WorkRun:
-        request = self._request(run, WorkflowStage.EXECUTION, 1)
+    async def _execute(self, run: WorkRun, work_item: WorkItem, environment: ExecutionEnvironment) -> WorkRun:
+        # EXECUTING is never re-entered once left (see ALLOWED_TRANSITIONS), so this always runs once.
+        request = self._execution_request(run, work_item, environment, WorkflowStage.EXECUTION, 1)
         try:
-            artifacts = self._executor.execute(request)
+            artifacts, outcome = await self._run_executor(request)
             updated = self._attach_all(run, artifacts)
         except Exception:
-            return self._fail(run, WorkflowStage.EXECUTION)
+            return await self._fail(run, WorkflowStage.EXECUTION)
+        if outcome is not TerminalOutcome.COMPLETED:
+            return await self._fail_from(run, updated, WorkflowStage.EXECUTION, f"execution_{outcome.value}")
         return self._transition_from(run, updated, WorkRunState.VERIFYING)
 
-    def _verify(self, run: WorkRun) -> WorkRun:
+    async def _run_executor(self, request: ExecutionRequest) -> tuple[tuple[WorkRunArtifact, ...], TerminalOutcome]:
+        session = await self._executor.start(request)
+        async for _ in session.events():
+            pass
+        result: ExecutionResult = await session.result()
+        artifacts = tuple(
+            WorkRunArtifact(
+                artifact_id=artifact.relative_path,
+                kind="execution",
+                uri=f"artifact://{request.execution_id}/{artifact.relative_path}",
+                sha256=artifact.content_sha256,
+            )
+            for artifact in result.artifacts
+        )
+        return artifacts, result.outcome
+
+    async def _verify(self, run: WorkRun) -> WorkRun:
         attempt = 1 + self._event_count(run, "entered_remediating")
-        request = self._request(run, WorkflowStage.VERIFICATION, attempt)
         try:
-            result = self._verifier.verify(request)
+            result = await self._verifier.verify(run)
             if not isinstance(result, VerificationResult):
                 raise TypeError("verifier must return VerificationResult")
             updated = self._attach_all(run, result.artifacts)
             passed = result.passed
         except Exception:
-            return self._fail(run, WorkflowStage.VERIFICATION)
+            return await self._fail(run, WorkflowStage.VERIFICATION)
         if passed:
             return self._transition_from(run, updated, WorkRunState.PUBLISHING_DRAFT_PR)
         if attempt > self._max_remediation_cycles:
-            return self._fail_from(run, updated, WorkflowStage.VERIFICATION, "remediation_limit_reached")
+            return await self._fail_from(run, updated, WorkflowStage.VERIFICATION, "remediation_limit_reached")
         return self._transition_from(run, updated, WorkRunState.REMEDIATING)
 
-    def _remediate(self, run: WorkRun) -> WorkRun:
-        attempt = self._event_count(run, "entered_remediating")
-        request = self._request(run, WorkflowStage.REMEDIATION, attempt)
+    async def _remediate(self, run: WorkRun) -> WorkRun:
         try:
-            artifacts = self._remediator.remediate(request)
+            artifacts = await self._remediator.remediate(run)
             updated = self._attach_all(run, artifacts)
         except Exception:
-            return self._fail(run, WorkflowStage.REMEDIATION)
+            return await self._fail(run, WorkflowStage.REMEDIATION)
         return self._transition_from(run, updated, WorkRunState.VERIFYING)
 
-    def _publish(self, run: WorkRun) -> WorkRun:
-        request = self._request(run, WorkflowStage.DRAFT_PR_PUBLICATION, 1)
+    async def _publish(self, run: WorkRun) -> WorkRun:
         try:
-            url = self._publisher.publish(request)
+            url = await self._publisher.publish(run)
             updated = run.record_draft_pr(url, actor_id=self._actor_id, occurred_at=self._next_time(run))
         except Exception:
-            return self._fail(run, WorkflowStage.DRAFT_PR_PUBLICATION)
+            return await self._fail(run, WorkflowStage.DRAFT_PR_PUBLICATION)
         return self._transition_from(run, updated, WorkRunState.COMPLETED)
+
+    async def _report_outcome(self, run: WorkRun) -> None:
+        idempotency_key = f"{run.run_id}:report:{run.state.value}"
+        if run.state is WorkRunState.COMPLETED and run.draft_pr_url is not None:
+            await self._work_management.complete_work(
+                CompletionUpdate(
+                    work_item_key=run.correlation.jira_issue_key,
+                    idempotency_key=idempotency_key,
+                    summary="GearMeshing-AI completed the governed work run.",
+                    evidence_urls=(run.draft_pr_url,),
+                )
+            )
+        elif run.state in {WorkRunState.FAILED, WorkRunState.BLOCKED}:
+            details = dict(run.events[-1].details)
+            await self._work_management.report_blocker(
+                BlockerUpdate(
+                    work_item_key=run.correlation.jira_issue_key,
+                    idempotency_key=idempotency_key,
+                    summary=details.get("failure_code", run.state.value),
+                    details=details.get("summary", f"The work run entered {run.state.value}."),
+                )
+            )
 
     def _attach_all(self, run: WorkRun, artifacts: tuple[WorkRunArtifact, ...]) -> WorkRun:
         updated = run
@@ -271,10 +361,10 @@ class WorkflowRunner:
         self._checkpoints.save(expected=expected, updated=transitioned)
         return transitioned
 
-    def _fail(self, run: WorkRun, stage: WorkflowStage) -> WorkRun:
-        return self._fail_from(run, run, stage, "operation_failed")
+    async def _fail(self, run: WorkRun, stage: WorkflowStage) -> WorkRun:
+        return await self._fail_from(run, run, stage, "operation_failed")
 
-    def _fail_from(self, expected: WorkRun, updated: WorkRun, stage: WorkflowStage, code: str) -> WorkRun:
+    async def _fail_from(self, expected: WorkRun, updated: WorkRun, stage: WorkflowStage, code: str) -> WorkRun:
         failed = updated.transition_to(
             WorkRunState.FAILED,
             actor_id=self._actor_id,
@@ -288,19 +378,34 @@ class WorkflowRunner:
         occurred_at = self._clock()
         if occurred_at.tzinfo is None or occurred_at.utcoffset() is None:
             raise WorkflowIntegrityError("workflow clock must return a timezone-aware timestamp")
-        if occurred_at <= run.events[-1].occurred_at:
-            raise WorkflowIntegrityError("workflow timestamps must increase monotonically")
+        if occurred_at < run.events[-1].occurred_at:
+            raise WorkflowIntegrityError("workflow timestamps must not regress")
         return occurred_at
 
     @staticmethod
     def _event_count(run: WorkRun, name: str) -> int:
         return sum(event.name == name for event in run.events)
 
-    @staticmethod
-    def _request(run: WorkRun, stage: WorkflowStage, attempt: int) -> StageRequest:
-        return StageRequest(
-            run_id=run.run_id,
-            correlation=run.correlation,
-            artifacts=run.artifacts,
-            idempotency_key=f"{run.run_id}:{stage.value}:{attempt}",
+    def _execution_request(
+        self,
+        run: WorkRun,
+        work_item: WorkItem,
+        environment: ExecutionEnvironment,
+        stage: WorkflowStage,
+        attempt: int,
+    ) -> ExecutionRequest:
+        content = canonical_work_item_content(work_item.title, work_item.description, work_item.acceptance_criteria)
+        specification = ApprovedSpecification(
+            issue_key=run.correlation.jira_issue_key,
+            revision=run.correlation.jira_issue_revision,
+            content=content,
+            content_sha256=run.correlation.jira_issue_content_sha256,
+            approved_by=run.events[0].actor_id,
+        )
+        return ExecutionRequest(
+            execution_id=f"{run.run_id}:{stage.value}:{attempt}",
+            specification=specification,
+            repository=environment.repository,
+            limits=environment.limits,
+            tool_grants=environment.tool_grants,
         )
