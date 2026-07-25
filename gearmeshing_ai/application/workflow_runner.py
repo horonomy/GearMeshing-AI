@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -11,6 +11,7 @@ from typing import Protocol
 from gearmeshing_ai.application.ports.coding_executor import (
     ApprovedSpecification,
     CodingExecutor,
+    ExecutionEvent,
     ExecutionRequest,
     ExecutionResult,
     RepositoryContext,
@@ -31,6 +32,7 @@ from gearmeshing_ai.domain.work_run import (
     TERMINAL_STATES,
     WorkRun,
     WorkRunArtifact,
+    WorkRunEvent,
     WorkRunState,
 )
 
@@ -221,9 +223,15 @@ class WorkflowRunner:
 
     @staticmethod
     def _validate_checkpoint(run: WorkRun) -> None:
+        artifact_events, draft_pr_events = WorkflowRunner._walk_checkpoint_history(run)
+        WorkflowRunner._validate_checkpoint_artifacts(run, artifact_events)
+        WorkflowRunner._validate_checkpoint_draft_pr(run, draft_pr_events)
+
+    @staticmethod
+    def _walk_checkpoint_history(run: WorkRun) -> tuple[list[WorkRunEvent], list[WorkRunEvent]]:
         previous_state = WorkRunState.APPROVED
-        artifact_events = []
-        draft_pr_events = []
+        artifact_events: list[WorkRunEvent] = []
+        draft_pr_events: list[WorkRunEvent] = []
         for event in run.events[1:]:
             if event.state is previous_state:
                 if event.name == "artifact_attached":
@@ -237,7 +245,10 @@ class WorkflowRunner:
             elif event.name != f"entered_{event.state.value}":
                 raise WorkflowIntegrityError("checkpoint transition is missing its canonical audit event")
             previous_state = event.state
+        return artifact_events, draft_pr_events
 
+    @staticmethod
+    def _validate_checkpoint_artifacts(run: WorkRun, artifact_events: list[WorkRunEvent]) -> None:
         recorded_artifacts = tuple(event.details for event in artifact_events)
         actual_artifacts = tuple(
             (
@@ -250,6 +261,9 @@ class WorkflowRunner:
         )
         if recorded_artifacts != actual_artifacts:
             raise WorkflowIntegrityError("checkpoint evidence does not match its audit events")
+
+    @staticmethod
+    def _validate_checkpoint_draft_pr(run: WorkRun, draft_pr_events: list[WorkRunEvent]) -> None:
         if run.draft_pr_url is None and draft_pr_events:
             raise WorkflowIntegrityError("checkpoint lost its recorded Draft PR")
         if run.draft_pr_url is not None and (
@@ -264,15 +278,14 @@ class WorkflowRunner:
             artifacts, outcome = await self._run_executor(request)
             updated = self._attach_all(run, artifacts)
         except Exception:
-            return await self._fail(run, WorkflowStage.EXECUTION)
+            return self._fail(run, WorkflowStage.EXECUTION)
         if outcome is not TerminalOutcome.COMPLETED:
-            return await self._fail_from(run, updated, WorkflowStage.EXECUTION, f"execution_{outcome.value}")
+            return self._fail_from(run, updated, WorkflowStage.EXECUTION, f"execution_{outcome.value}")
         return self._transition_from(run, updated, WorkRunState.VERIFYING)
 
     async def _run_executor(self, request: ExecutionRequest) -> tuple[tuple[WorkRunArtifact, ...], TerminalOutcome]:
         session = await self._executor.start(request)
-        async for _ in session.events():
-            pass
+        await self._drain(session.events())
         result: ExecutionResult = await session.result()
         artifacts = tuple(
             WorkRunArtifact(
@@ -285,6 +298,12 @@ class WorkflowRunner:
         )
         return artifacts, result.outcome
 
+    @staticmethod
+    async def _drain(events: AsyncIterator[ExecutionEvent]) -> None:
+        """Consume every streamed event so ``session.result()`` observes the terminal outcome."""
+        async for _ in events:
+            continue
+
     async def _verify(self, run: WorkRun) -> WorkRun:
         attempt = 1 + self._event_count(run, "entered_remediating")
         try:
@@ -294,11 +313,11 @@ class WorkflowRunner:
             updated = self._attach_all(run, result.artifacts)
             passed = result.passed
         except Exception:
-            return await self._fail(run, WorkflowStage.VERIFICATION)
+            return self._fail(run, WorkflowStage.VERIFICATION)
         if passed:
             return self._transition_from(run, updated, WorkRunState.PUBLISHING_DRAFT_PR)
         if attempt > self._max_remediation_cycles:
-            return await self._fail_from(run, updated, WorkflowStage.VERIFICATION, "remediation_limit_reached")
+            return self._fail_from(run, updated, WorkflowStage.VERIFICATION, "remediation_limit_reached")
         return self._transition_from(run, updated, WorkRunState.REMEDIATING)
 
     async def _remediate(self, run: WorkRun) -> WorkRun:
@@ -306,7 +325,7 @@ class WorkflowRunner:
             artifacts = await self._remediator.remediate(run)
             updated = self._attach_all(run, artifacts)
         except Exception:
-            return await self._fail(run, WorkflowStage.REMEDIATION)
+            return self._fail(run, WorkflowStage.REMEDIATION)
         return self._transition_from(run, updated, WorkRunState.VERIFYING)
 
     async def _publish(self, run: WorkRun) -> WorkRun:
@@ -314,7 +333,7 @@ class WorkflowRunner:
             url = await self._publisher.publish(run)
             updated = run.record_draft_pr(url, actor_id=self._actor_id, occurred_at=self._next_time(run))
         except Exception:
-            return await self._fail(run, WorkflowStage.DRAFT_PR_PUBLICATION)
+            return self._fail(run, WorkflowStage.DRAFT_PR_PUBLICATION)
         return self._transition_from(run, updated, WorkRunState.COMPLETED)
 
     async def _report_outcome(self, run: WorkRun) -> None:
@@ -361,10 +380,10 @@ class WorkflowRunner:
         self._checkpoints.save(expected=expected, updated=transitioned)
         return transitioned
 
-    async def _fail(self, run: WorkRun, stage: WorkflowStage) -> WorkRun:
-        return await self._fail_from(run, run, stage, "operation_failed")
+    def _fail(self, run: WorkRun, stage: WorkflowStage) -> WorkRun:
+        return self._fail_from(run, run, stage, "operation_failed")
 
-    async def _fail_from(self, expected: WorkRun, updated: WorkRun, stage: WorkflowStage, code: str) -> WorkRun:
+    def _fail_from(self, expected: WorkRun, updated: WorkRun, stage: WorkflowStage, code: str) -> WorkRun:
         failed = updated.transition_to(
             WorkRunState.FAILED,
             actor_id=self._actor_id,

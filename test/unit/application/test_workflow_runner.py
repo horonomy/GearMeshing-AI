@@ -359,8 +359,10 @@ async def test_checkpoint_must_belong_to_the_requested_run() -> None:
 
     runner, *_ = _runner(MisroutedCheckpoints())  # type: ignore[arg-type]
 
+    environment = _environment()
+
     with pytest.raises(WorkflowIntegrityError, match="does not extend"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
 
 
 async def test_ingest_persists_the_approved_input_as_the_first_checkpoint() -> None:
@@ -512,8 +514,10 @@ async def test_checkpoint_rejects_events_outside_the_governed_history() -> None:
     tampered = replace(approved, events=(*approved.events, tampered_event))
     runner, *_ = _runner(MemoryCheckpoints(tampered))
 
+    environment = _environment()
+
     with pytest.raises(WorkflowIntegrityError, match="invalid same-state event"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
 
 
 async def test_draft_pr_retry_reuses_the_run_and_records_one_url() -> None:
@@ -557,8 +561,10 @@ async def test_draft_pr_retry_reuses_the_run_and_records_one_url() -> None:
         clock=TickingClock(START + timedelta(seconds=3)),
     )
 
+    environment = _environment()
+
     with pytest.raises(RuntimeError, match="checkpoint outage"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
     completed = await runner.run(approved, _environment())
 
     assert len(publisher.calls) == 2
@@ -576,8 +582,10 @@ async def test_checkpoint_cannot_change_external_correlation() -> None:
     checkpoint = replace(approved, correlation=changed_correlation)
     runner, *_ = _runner(MemoryCheckpoints(checkpoint))
 
+    environment = _environment()
+
     with pytest.raises(WorkflowIntegrityError, match="does not extend"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
 
 
 async def test_checkpoint_transitions_require_canonical_audit_events() -> None:
@@ -591,8 +599,10 @@ async def test_checkpoint_transitions_require_canonical_audit_events() -> None:
     tampered = replace(executing, events=(executing.events[0], renamed_event))
     runner, *_ = _runner(MemoryCheckpoints(tampered))
 
+    environment = _environment()
+
     with pytest.raises(WorkflowIntegrityError, match="canonical audit event"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
 
 
 async def test_checkpoint_evidence_must_match_its_audit_prefix() -> None:
@@ -611,8 +621,10 @@ async def test_checkpoint_evidence_must_match_its_audit_prefix() -> None:
     tampered = replace(evidenced, artifacts=(changed_artifact,))
     runner, *_ = _runner(MemoryCheckpoints(tampered))
 
+    environment = _environment()
+
     with pytest.raises(WorkflowIntegrityError, match="evidence does not match"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
 
 
 @pytest.mark.parametrize(
@@ -637,8 +649,10 @@ async def test_checkpoint_rejects_replaced_artifact_integrity(replacement: dict[
     tampered = replace(evidenced, artifacts=(replace(evidenced.artifacts[0], **replacement),))
     runner, *_ = _runner(MemoryCheckpoints(tampered))
 
+    environment = _environment()
+
     with pytest.raises(WorkflowIntegrityError, match="evidence does not match"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
 
 
 async def test_remediation_cycles_stop_at_the_configured_limit() -> None:
@@ -680,8 +694,10 @@ async def test_runner_rejects_regressing_audit_timestamps() -> None:
         clock=lambda: START - timedelta(seconds=1),
     )
 
+    environment = _environment()
+
     with pytest.raises(WorkflowIntegrityError, match="not regress"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
 
     assert checkpoints.saved == [approved]
 
@@ -709,8 +725,10 @@ async def test_runner_rejects_a_work_item_edited_after_approval() -> None:
     checkpoints = MemoryCheckpoints()
     runner, *_ = _runner(checkpoints, work_management=FakeWorkManagement(_work_item(revision="2")))
 
+    environment = _environment()
+
     with pytest.raises(WorkflowIntegrityError, match="no longer matches"):
-        await runner.run(approved, _environment())
+        await runner.run(approved, environment)
 
 
 async def test_runner_blocks_when_the_work_item_is_not_ready() -> None:
