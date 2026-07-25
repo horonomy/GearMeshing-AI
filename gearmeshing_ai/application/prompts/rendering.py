@@ -97,13 +97,13 @@ class PromptRegistry:
 
     def __init__(self, prompts_root: Path = DEFAULT_PROMPTS_ROOT) -> None:
         self._prompts_root = prompts_root
-        self._environment = Environment(
+        # These templates render plain text for an LLM prompt, never HTML for a browser, so there
+        # is no XSS surface here; HTML entity escaping would instead corrupt prompt content (e.g.
+        # quotes, ampersands in a diff or Jira description).
+        self._environment = Environment(  # NOSONAR
             loader=FileSystemLoader(str(prompts_root)),
             undefined=StrictUndefined,
-            # These templates render plain text for an LLM prompt, never HTML for a browser, so
-            # there is no XSS surface here; HTML entity escaping would instead corrupt prompt
-            # content (e.g. quotes, ampersands in a diff or Jira description).
-            autoescape=False,  # NOSONAR
+            autoescape=False,
             keep_trailing_newline=True,
         )
         self._environment.filters["untrusted"] = wrap_untrusted
