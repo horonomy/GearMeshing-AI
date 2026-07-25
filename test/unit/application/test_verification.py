@@ -78,13 +78,14 @@ def test_deterministic_fixture_round_trips_through_json() -> None:
 def test_schema_version_is_pinned_to_the_current_literal() -> None:
     assert SCHEMA_VERSION == 1
 
+    acceptance_criteria = (passing_criterion(),)
     with pytest.raises(ValidationError):
         StructuredVerificationResult(
             schema_version=2,  # type: ignore[arg-type]
             run_id="run-1",
             status=VerificationStatus.PASSED,
             confidence=1.0,
-            acceptance_criteria=(passing_criterion(),),
+            acceptance_criteria=acceptance_criteria,
             pr_readiness=PrReadiness.READY,
         )
 
@@ -219,12 +220,13 @@ def test_acceptance_criteria_must_not_be_empty() -> None:
 
 
 def test_confidence_must_be_within_the_unit_interval() -> None:
+    acceptance_criteria = (passing_criterion(),)
     with pytest.raises(ValidationError, match="confidence must be between"):
         StructuredVerificationResult(
             run_id="run-1",
             status=VerificationStatus.PASSED,
             confidence=1.5,
-            acceptance_criteria=(passing_criterion(),),
+            acceptance_criteria=acceptance_criteria,
             pr_readiness=PrReadiness.READY,
         )
 
@@ -238,13 +240,15 @@ def test_duplicate_finding_ids_are_rejected() -> None:
 
 
 def test_duplicate_repository_check_names_are_rejected() -> None:
+    acceptance_criteria = (passing_criterion(),)
+    repository_checks = (passing_check("pytest"), passing_check("pytest"))
     with pytest.raises(ValidationError, match="check_name"):
         StructuredVerificationResult(
             run_id="run-1",
             status=VerificationStatus.PASSED,
             confidence=1.0,
-            acceptance_criteria=(passing_criterion(),),
-            repository_checks=(passing_check("pytest"), passing_check("pytest")),
+            acceptance_criteria=acceptance_criteria,
+            repository_checks=repository_checks,
             pr_readiness=PrReadiness.READY,
         )
 
@@ -257,24 +261,26 @@ def test_result_is_immutable() -> None:
 
 
 def test_extra_fields_are_rejected() -> None:
+    acceptance_criteria = (passing_criterion(),)
     with pytest.raises(ValidationError):
         StructuredVerificationResult(
             run_id="run-1",
             status=VerificationStatus.PASSED,
             confidence=1.0,
-            acceptance_criteria=(passing_criterion(),),
+            acceptance_criteria=acceptance_criteria,
             pr_readiness=PrReadiness.READY,
             extra_field="not allowed",  # type: ignore[call-arg]
         )
 
 
 def test_boolean_is_rejected_for_confidence_under_strict_mode() -> None:
+    acceptance_criteria = (passing_criterion(),)
     with pytest.raises(ValidationError):
         StructuredVerificationResult(
             run_id="run-1",
             status=VerificationStatus.PASSED,
             confidence=True,
-            acceptance_criteria=(passing_criterion(),),
+            acceptance_criteria=acceptance_criteria,
             pr_readiness=PrReadiness.READY,
         )
 
@@ -294,13 +300,14 @@ def test_unresolved_risk_requires_bounded_summary() -> None:
 
 def test_duplicate_unresolved_risk_ids_are_rejected() -> None:
     risk = UnresolvedRisk(risk_id="risk-1", summary="A residual concern.")
+    acceptance_criteria = (passing_criterion(),)
 
     with pytest.raises(ValidationError, match="risk_id"):
         StructuredVerificationResult(
             run_id="run-1",
             status=VerificationStatus.PASSED,
             confidence=1.0,
-            acceptance_criteria=(passing_criterion(),),
+            acceptance_criteria=acceptance_criteria,
             unresolved_risks=(risk, risk),
             pr_readiness=PrReadiness.READY,
         )
