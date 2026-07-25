@@ -1,0 +1,58 @@
+{
+  "dataset_version": "1.0.0",
+  "item_id": "doc_change_update_usage_notes",
+  "scenario_category": "success",
+  "fixture_repository": "sample_service",
+  "work_item": {
+    "key": "FIX-101",
+    "title": "Document the pricing module's rounding behavior",
+    "description": "Update fixtures/sample_service/docs/USAGE.md to add a short note describing that pricing.apply_discount currently performs flat-cent subtraction, matching its current implementation. No code changes.",
+    "acceptance_criteria": [
+      "docs/USAGE.md documents apply_discount's current flat-cent subtraction behavior.",
+      "No Python source files are modified."
+    ],
+    "status": "Ready",
+    "web_url": "https://example.invalid/browse/FIX-101",
+    "repository": {
+      "provider": "github",
+      "owner": "gmai-fixtures",
+      "name": "sample-service",
+      "web_url": "https://example.invalid/gmai-fixtures/sample-service"
+    },
+    "revision": "rev-1",
+    "content_sha256": "51cdbfa3fb32cd47cba00cf596b4b15a4dd399dddd85c1c236461be879618111",
+    "labels": ["spec-ready", "documentation"],
+    "metadata": {
+      "issue_type": "Task",
+      "description_present": true
+    }
+  },
+  "expected_changed_files": [
+    "fixtures/sample_service/docs/USAGE.md"
+  ],
+  "forbidden_changes": [
+    "fixtures/sample_service/pyproject.toml",
+    "fixtures/sample_service/NOTICE",
+    "fixtures/sample_service/inventory_service/pricing.py",
+    "fixtures/sample_service/inventory_service/catalog.py",
+    "fixtures/sample_service/inventory_service/api.py",
+    "fixtures/sample_service/tests/"
+  ],
+  "expected_checks": [
+    {
+      "command": "pytest -q",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    },
+    {
+      "command": "ruff check .",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    }
+  ],
+  "expected_outcome": {
+    "terminal_outcome": "completed",
+    "failure_category": null,
+    "notes": "Documentation-only change; no behavior or check results change."
+  }
+}
