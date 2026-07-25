@@ -154,7 +154,10 @@ class LocalAgentIdentityResolver:
                 tokens[role] = token
         return cls(actor_ids, tokens=tokens)
 
-    async def resolve(self, role: ActorRole) -> ActorIdentity:
+    # This body never awaits: it reads from an in-memory mapping populated at construction
+    # time, per the class docstring's "the resolver may do no I/O at all underneath" contract.
+    # It stays async to satisfy the AgentIdentityProvider.resolve Protocol signature.
+    async def resolve(self, role: ActorRole) -> ActorIdentity:  # NOSONAR
         if not isinstance(role, ActorRole):
             raise TypeError("role must be an ActorRole")
         raw_actor_id = self._actor_ids.get(role)
