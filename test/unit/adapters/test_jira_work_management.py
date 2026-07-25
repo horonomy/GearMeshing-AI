@@ -104,6 +104,7 @@ def issue_payload(
             "status": {"name": "In Progress"},
             "labels": labels if labels is not None else ["spec-ready", "mvp-1"],
             "issuetype": {"name": issue_type},
+            "updated": "2026-07-22T12:00:00.000+0000",
         },
         "properties": properties,
     }

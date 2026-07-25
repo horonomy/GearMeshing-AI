@@ -43,6 +43,7 @@ from gearmeshing_ai.application.ports.work_management import (
     WorkItem,
     WorkManagementCapability,
     WorkManagementProvider,
+    canonical_work_item_content,
 )
 
 _REPOSITORY_PROPERTY: Final = "gearmeshing-ai.repository"
@@ -326,7 +327,7 @@ class JiraWorkManagementProvider(WorkManagementProvider):
                 "GET",
                 f"/rest/api/3/issue/{quote(key, safe='')}",
                 params={
-                    "fields": "summary,description,status,labels,issuetype",
+                    "fields": "summary,description,status,labels,issuetype,updated",
                     "properties": _REPOSITORY_PROPERTY,
                 },
             ),
@@ -363,14 +364,19 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         issue_type = self._object(fields.get("issuetype"), "issue type")
         properties = self._object(payload.get("properties", {}), "issue properties")
         repository, repository_context_present = self._repository(properties)
+        title = self._string(fields.get("summary"), "summary")
+        revision = self._timestamp(fields.get("updated"), "updated").isoformat()
+        content = canonical_work_item_content(title, description, normalized_criteria)
         return WorkItem(
             key=response_key,
-            title=self._string(fields.get("summary"), "summary"),
+            title=title,
             description=description,
             acceptance_criteria=normalized_criteria,
             status=self._string(status.get("name"), "status name"),
             web_url=f"{self._configuration.site_url}/browse/{quote(key, safe='')}",
             repository=repository,
+            revision=revision,
+            content_sha256=hashlib.sha256(content.encode()).hexdigest(),
             labels=tuple(cast(list[str], raw_labels)),
             metadata=Metadata(
                 {
