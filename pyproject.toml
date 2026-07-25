@@ -45,6 +45,7 @@ asyncio_mode = "auto"
 [tool.ruff]
 target-version = "py313"
 line-length = 120
+exclude = ["fixtures/sample_service"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
@@ -54,3 +55,4 @@ python_version = "3.13"
 strict = true
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
+exclude = ["^fixtures/sample_service/"]
