@@ -501,8 +501,9 @@ async def test_executor_rejects_grants_outside_its_capabilities(tmp_path: Path) 
         launcher=launcher,
     )
 
+    request = make_request(tmp_path)
     with pytest.raises(ValueError, match="unsupported tool grants: shell"):
-        await executor.start(make_request(tmp_path))
+        await executor.start(request)
 
 
 async def test_executor_start_is_idempotent_for_the_same_request(tmp_path: Path) -> None:

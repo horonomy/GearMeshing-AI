@@ -260,14 +260,20 @@ class ClaudeCodeExecutionSession:
 
     async def result(self) -> ExecutionResult:
         if self._result is None:
+            # Drain the event stream to its terminal event; _stream_events sets self._result
+            # as a side effect once it observes the terminal outcome, so nothing is done here
+            # with each event beyond advancing the async iterator to completion.
             stream = self._stream if self._stream is not None else self.events()
             async for _ in stream:
-                pass
+                continue
         if self._result is None:
             raise RuntimeError("the event stream closed before a terminal result")
         return self._result
 
-    async def cancel(self, reason: str) -> None:
+    # This body never awaits: it records intent and signals the already-running subprocess
+    # handle synchronously. It stays async to satisfy the ExecutionSession.cancel Protocol
+    # signature, which callers rely on to await it alongside other session operations.
+    async def cancel(self, reason: str) -> None:  # NOSONAR
         if not self._cancellation_supported:
             raise RuntimeError("cancellation is not supported")
         normalized = _bounded_text(reason, "cancellation reason", maximum=512)
@@ -277,6 +283,41 @@ class ClaudeCodeExecutionSession:
             self._cancel_reason = normalized
         if self._handle is not None:
             self._handle.kill()
+
+    async def _read_next_line(
+        self, handle: SubprocessHandle, deadline: float
+    ) -> tuple[TerminalOutcome, FailureMetadata] | bytes:
+        """Read one stdout line, or return a terminal signal if the read cannot proceed.
+
+        Centralizes every reason the stream can end without a parsed line (caller
+        cancellation, wall-clock timeout, an OS-level I/O failure, or the process
+        exiting before writing a result line) so ``_stream_events`` only has to
+        distinguish "got a line" from "settle to this terminal outcome".
+        """
+        if self._is_cancelled():
+            return self._cancelled_outcome()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return self._timed_out_outcome()
+        try:
+            raw_line = await asyncio.wait_for(handle.read_line(), timeout=remaining)
+        except TimeoutError:
+            return self._timed_out_outcome()
+        except OSError:
+            return TerminalOutcome.FAILED, FailureMetadata(
+                FailureCategory.PROVIDER,
+                "process_io_error",
+                "Claude Code's output stream failed before reporting a terminal result",
+            )
+        if self._is_cancelled():
+            return self._cancelled_outcome()
+        if raw_line is None:
+            return TerminalOutcome.FAILED, FailureMetadata(
+                FailureCategory.PROVIDER,
+                "process_exited_without_result",
+                "Claude Code exited before reporting a terminal result",
+            )
+        return raw_line
 
     async def _stream_events(self) -> AsyncIterator[ExecutionEvent]:
         limits = self._request.limits
@@ -290,38 +331,11 @@ class ClaudeCodeExecutionSession:
         try:
             deadline = time.monotonic() + limits.wall_clock_seconds
             while True:
-                if self._is_cancelled():
-                    outcome, failure = self._cancelled_outcome()
+                step = await self._read_next_line(handle, deadline)
+                if not isinstance(step, bytes):
+                    outcome, failure = step
                     break
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    outcome, failure = self._timed_out_outcome()
-                    break
-                try:
-                    raw_line = await asyncio.wait_for(handle.read_line(), timeout=remaining)
-                except TimeoutError:
-                    outcome, failure = self._timed_out_outcome()
-                    break
-                except OSError:
-                    outcome = TerminalOutcome.FAILED
-                    failure = FailureMetadata(
-                        FailureCategory.PROVIDER,
-                        "process_io_error",
-                        "Claude Code's output stream failed before reporting a terminal result",
-                    )
-                    break
-                if self._is_cancelled():
-                    outcome, failure = self._cancelled_outcome()
-                    break
-                if raw_line is None:
-                    outcome = TerminalOutcome.FAILED
-                    failure = FailureMetadata(
-                        FailureCategory.PROVIDER,
-                        "process_exited_without_result",
-                        "Claude Code exited before reporting a terminal result",
-                    )
-                    break
-                parsed = _parse_line(raw_line)
+                parsed = _parse_line(step)
                 if parsed is None:
                     continue
                 if parsed.get("type") == "result":
@@ -522,7 +536,10 @@ class ClaudeCodeExecutor:
     def capabilities(self) -> ExecutorCapabilities:
         return self._capabilities
 
-    async def start(self, request: ExecutionRequest) -> ClaudeCodeExecutionSession:
+    # This body never awaits: session construction and the underlying subprocess launch
+    # (in ClaudeCodeExecutionSession._stream_events) are deferred to events()/result(). It
+    # stays async to satisfy the CodingExecutor.start Protocol signature.
+    async def start(self, request: ExecutionRequest) -> ClaudeCodeExecutionSession:  # NOSONAR
         unsupported = {grant.tool for grant in request.tool_grants} - self._capabilities.tool_names
         if unsupported:
             names = ", ".join(sorted(unsupported))
