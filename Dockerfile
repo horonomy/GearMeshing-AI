@@ -18,17 +18,23 @@ ENV UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     UV_PYTHON_DOWNLOADS=never
 
-# Install dependencies first so dependency layers are cached independently of source changes.
+# Install locked third-party dependencies first, with --no-build so no dependency's source
+# distribution can execute an arbitrary build-backend setup script; only prebuilt wheels are used.
+# --no-install-project defers installing gearmeshing_ai itself to the explicit wheel build below.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-install-project --no-dev
+    uv sync --locked --no-install-project --no-build
 
-# Now copy the rest of the project and install it (plus dev deps for test-suite support).
+# Now copy the rest of the project, build it as a wheel (a source build of our own code, not a
+# third-party dependency, so it is not the risk --no-build above protects against), and install
+# that wheel with --no-build --no-deps so this step cannot trigger a source build either.
 COPY gearmeshing_ai ./gearmeshing_ai
 COPY test ./test
 COPY README.md ./README.md
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked
+    uv build --wheel -o /tmp/dist && \
+    uv pip install /tmp/dist/*.whl --no-build --no-deps && \
+    rm -rf /tmp/dist
 
 FROM python:3.13-slim AS runtime
 

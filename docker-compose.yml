@@ -12,7 +12,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-gearmeshing}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gearmeshing}
+      # No fallback default: an operator-supplied password is required via .env (see .env.example).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env; see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-gearmeshing}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -36,7 +37,7 @@ services:
     environment:
       # Database connection for the GearMeshing-AI CLI/library. No ORM/database dependency exists in
       # gearmeshing_ai today; this is provisioned ahead of that work landing.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-gearmeshing}:${POSTGRES_PASSWORD:-gearmeshing}@postgres:5432/${POSTGRES_DB:-gearmeshing}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gearmeshing}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env; see .env.example}@postgres:5432/${POSTGRES_DB:-gearmeshing}
 
       # --- Agent Assembly runtime/gateway integration points (STUBBED — known gap) ---
       # Agent Assembly has no runtime/gateway service or image in this repo yet. These variables are
