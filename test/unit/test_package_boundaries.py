@@ -12,6 +12,7 @@ import pytest
         "gearmeshing_ai.adapters",
         "gearmeshing_ai.runtime",
         "gearmeshing_ai.interfaces",
+        "gearmeshing_ai.testing",
     ),
 )
 def test_package_boundary_is_importable(module_name: str) -> None:
