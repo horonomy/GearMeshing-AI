@@ -268,12 +268,12 @@ def run(
 
     try:
         approved_or_blocked = asyncio.run(_start_run(normalized_key, credentials, actor_id=actor_id))
-    except (ValueError, JiraAdapterError, httpx.HTTPError) as error:
-        _fail(f"unable to start work run: {error}", json_output=json_output, command="run")
     except WorkRunValidationError as error:
         _fail(
             f"work item cannot be represented as a governed work run: {error}", json_output=json_output, command="run"
         )
+    except (ValueError, JiraAdapterError, httpx.HTTPError) as error:
+        _fail(f"unable to start work run: {error}", json_output=json_output, command="run")
 
     store.save(expected=None, updated=approved_or_blocked)
     _emit(
