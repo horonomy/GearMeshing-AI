@@ -119,8 +119,9 @@ def test_configuration_is_immutable_bounded_and_credential_safe() -> None:
         value.site_url = "https://example.com"  # type: ignore[misc]
     with pytest.raises(JiraConfigurationError):
         configuration(site_url="https://example.com:not-a-port")
+    nan_seconds = float("nan")
     with pytest.raises(JiraConfigurationError):
-        configuration(retry_base_seconds=float("nan"))
+        configuration(retry_base_seconds=nan_seconds)
 
 
 async def test_ready_issue_is_normalized_without_inventing_requirements() -> None:
@@ -285,8 +286,10 @@ async def test_inaccessible_issue_fails_immediately_without_secret_disclosure(
         requests += 1
         return httpx.Response(status_code)
 
+    adapter = provider(handler)
+
     with pytest.raises(expected_error, match=remediation) as caught:
-        await provider(handler).get_work_item("GMAI-17")
+        await adapter.get_work_item("GMAI-17")
 
     assert requests == 1
     assert "not-a-real-token" not in str(caught.value)
@@ -357,8 +360,10 @@ async def test_invalid_request_url_is_mapped_to_a_safe_configuration_error() -> 
     def handler(_: httpx.Request) -> httpx.Response:
         raise httpx.InvalidURL("invalid internal URL")
 
+    adapter = provider(handler)
+
     with pytest.raises(JiraConfigurationError, match="request URL is invalid") as caught:
-        await provider(handler).get_work_item("GMAI-17")
+        await adapter.get_work_item("GMAI-17")
 
     assert "not-a-real-token" not in str(caught.value)
 
@@ -418,9 +423,10 @@ async def test_disabled_writes_fail_as_explicit_unsupported_capabilities() -> No
         summary="Implementing adapter",
         percent_complete=50,
     )
+    adapter = provider(lambda _: httpx.Response(500))
 
     with pytest.raises(UnsupportedCapabilityError, match="update_progress"):
-        await provider(lambda _: httpx.Response(500)).update_progress(update)
+        await adapter.update_progress(update)
 
 
 async def test_repeated_write_reuses_comment_with_matching_idempotency_property() -> None:
@@ -489,15 +495,16 @@ async def test_existing_comment_rejects_timezone_naive_timestamp() -> None:
             },
         )
 
+    adapter = provider(handler, allow_writes=True)
+    update = ProgressUpdate(
+        work_item_key="GMAI-17",
+        idempotency_key="run-1:progress:50",
+        summary="Implementing adapter",
+        percent_complete=50,
+    )
+
     with pytest.raises(JiraResponseError, match="comment creation timestamp"):
-        await provider(handler, allow_writes=True).update_progress(
-            ProgressUpdate(
-                work_item_key="GMAI-17",
-                idempotency_key="run-1:progress:50",
-                summary="Implementing adapter",
-                percent_complete=50,
-            )
-        )
+        await adapter.update_progress(update)
 
 
 async def test_idempotency_key_reuse_with_changed_payload_fails_explicitly() -> None:
@@ -525,15 +532,16 @@ async def test_idempotency_key_reuse_with_changed_payload_fails_explicitly() -> 
             },
         )
 
+    adapter = provider(handler, allow_writes=True)
+    update = ProgressUpdate(
+        work_item_key="GMAI-17",
+        idempotency_key="run-1:progress:50",
+        summary="Changed payload",
+        percent_complete=50,
+    )
+
     with pytest.raises(JiraIdempotencyConflictError, match="different operation or payload"):
-        await provider(handler, allow_writes=True).update_progress(
-            ProgressUpdate(
-                work_item_key="GMAI-17",
-                idempotency_key="run-1:progress:50",
-                summary="Changed payload",
-                percent_complete=50,
-            )
-        )
+        await adapter.update_progress(update)
 
 
 async def test_idempotency_key_reuse_across_capabilities_fails_explicitly() -> None:
@@ -561,15 +569,16 @@ async def test_idempotency_key_reuse_across_capabilities_fails_explicitly() -> N
             },
         )
 
+    adapter = provider(handler, allow_writes=True)
+    update = BlockerUpdate(
+        work_item_key="GMAI-17",
+        idempotency_key="run-1:shared-key",
+        summary="Shared wording",
+        details="Await approval",
+    )
+
     with pytest.raises(JiraIdempotencyConflictError, match="different operation or payload"):
-        await provider(handler, allow_writes=True).report_blocker(
-            BlockerUpdate(
-                work_item_key="GMAI-17",
-                idempotency_key="run-1:shared-key",
-                summary="Shared wording",
-                details="Await approval",
-            )
-        )
+        await adapter.report_blocker(update)
 
 
 async def test_parallel_first_writes_expose_documented_jira_check_post_boundary() -> None:
@@ -643,15 +652,16 @@ async def test_new_comment_rejects_timezone_naive_timestamp() -> None:
             return httpx.Response(200, json={"comments": [], "total": 0})
         return httpx.Response(201, json={"id": "10002", "created": "2026-07-22T05:01:00"})
 
+    adapter = provider(handler, allow_writes=True)
+    update = ProgressUpdate(
+        work_item_key="GMAI-17",
+        idempotency_key="run-1:progress:75",
+        summary="Verifying adapter",
+        percent_complete=75,
+    )
+
     with pytest.raises(JiraResponseError, match="comment creation timestamp"):
-        await provider(handler, allow_writes=True).update_progress(
-            ProgressUpdate(
-                work_item_key="GMAI-17",
-                idempotency_key="run-1:progress:75",
-                summary="Verifying adapter",
-                percent_complete=75,
-            )
-        )
+        await adapter.update_progress(update)
 
 
 async def test_blocker_comment_boundary_is_validated_before_network_access() -> None:
@@ -679,15 +689,15 @@ async def test_blocker_comment_boundary_is_validated_before_network_access() -> 
     assert receipt.provider_reference == "10004"
     assert requests == 2
 
+    oversized_update = BlockerUpdate(
+        work_item_key="GMAI-17",
+        idempotency_key="run-1:blocker:oversized",
+        summary="S",
+        details=f"{maximum_details}d",
+    )
+
     with pytest.raises(JiraWriteValidationError, match="ADF text boundary"):
-        await adapter.report_blocker(
-            BlockerUpdate(
-                work_item_key="GMAI-17",
-                idempotency_key="run-1:blocker:oversized",
-                summary="S",
-                details=f"{maximum_details}d",
-            )
-        )
+        await adapter.report_blocker(oversized_update)
     assert requests == 2
 
 
@@ -704,15 +714,16 @@ async def test_completion_evidence_aggregate_is_bounded_before_network_access() 
         for index in range(150)
     )
 
+    adapter = provider(handler, allow_writes=True)
+    update = CompletionUpdate(
+        work_item_key="GMAI-17",
+        idempotency_key="run-1:completion:oversized",
+        summary="Verified",
+        evidence_urls=evidence_urls,
+    )
+
     with pytest.raises(JiraWriteValidationError, match="ADF text boundary"):
-        await provider(handler, allow_writes=True).complete_work(
-            CompletionUpdate(
-                work_item_key="GMAI-17",
-                idempotency_key="run-1:completion:oversized",
-                summary="Verified",
-                evidence_urls=evidence_urls,
-            )
-        )
+        await adapter.complete_work(update)
 
     assert requests == 0
 
@@ -755,11 +766,11 @@ async def test_raw_readiness_idempotency_key_is_validated_before_network(
         requests += 1
         return httpx.Response(500)
 
+    adapter = provider(handler, allow_writes=True)
+    readiness = ReadinessResult(work_item_key="GMAI-17")
+
     with pytest.raises(JiraWriteValidationError, match="idempotency_key"):
-        await provider(handler, allow_writes=True).publish_readiness(
-            ReadinessResult(work_item_key="GMAI-17"),
-            idempotency_key,
-        )
+        await adapter.publish_readiness(readiness, idempotency_key)
 
     assert requests == 0
 

@@ -49,7 +49,7 @@ from gearmeshing_ai.application.ports.work_management import (
 _REPOSITORY_PROPERTY: Final = "gearmeshing-ai.repository"
 _IDEMPOTENCY_PROPERTY: Final = "gearmeshing-ai.idempotency-key"
 _PROJECT_KEY = re.compile(r"^[A-Z][A-Z0-9_]{1,9}$")
-_ISSUE_KEY = re.compile(r"^[A-Z][A-Z0-9_]{1,9}-[1-9][0-9]*$")
+_ISSUE_KEY = re.compile(r"^[A-Z][A-Z0-9_]{1,9}-[1-9]\d*$")
 
 
 def _reject_nonfinite_json(value: str) -> None:
@@ -197,20 +197,101 @@ class JiraWorkManagementProvider(WorkManagementProvider):
         maximum = self._configuration.max_retry_after_seconds
         raw_value = response.headers.get("Retry-After", "").strip()
         if raw_value:
-            try:
-                delay = float(raw_value)
-                if isfinite(delay) and 0 <= delay <= maximum:
-                    return delay
-            except ValueError:
-                try:
-                    deadline = parsedate_to_datetime(raw_value)
-                    if deadline.tzinfo is not None:
-                        delay = max(0.0, (deadline - datetime.now(UTC)).total_seconds())
-                        if isfinite(delay) and delay <= maximum:
-                            return delay
-                except (TypeError, ValueError, OverflowError):
-                    pass
+            delay = self._retry_after_seconds(raw_value, maximum)
+            if delay is None:
+                delay = self._retry_after_http_date(raw_value, maximum)
+            if delay is not None:
+                return delay
         return float(min(self._configuration.retry_base_seconds * (2**retry_number), maximum))
+
+    @staticmethod
+    def _retry_after_seconds(raw_value: str, maximum: float) -> float | None:
+        try:
+            delay = float(raw_value)
+        except ValueError:
+            return None
+        return delay if isfinite(delay) and 0 <= delay <= maximum else None
+
+    @staticmethod
+    def _retry_after_http_date(raw_value: str, maximum: float) -> float | None:
+        try:
+            deadline = parsedate_to_datetime(raw_value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if deadline.tzinfo is None:
+            return None
+        delay = max(0.0, (deadline - datetime.now(UTC)).total_seconds())
+        return delay if isfinite(delay) and delay <= maximum else None
+
+    def _raise_for_status(self, response: httpx.Response, method: str) -> None:
+        if response.status_code == 401:
+            raise JiraAuthenticationError(
+                "Jira authentication failed; verify the account email and replace the API token"
+            )
+        if response.status_code == 403:
+            raise JiraAuthorizationError("Jira denied this operation; grant the account project and issue permissions")
+        if response.status_code == 404:
+            raise JiraNotFoundError("Jira resource was not found or is not visible to this account")
+        if not 200 <= response.status_code < 300:
+            raise JiraResponseError(f"Jira returned HTTP {response.status_code} for {method.upper()}")
+
+    async def _read_bounded_body(self, response: httpx.Response) -> bytearray:
+        payload = bytearray()
+        async for chunk in response.aiter_bytes():
+            payload.extend(chunk)
+            if len(payload) > self._configuration.max_response_bytes:
+                raise JiraResponseError("Jira response exceeded the configured byte limit")
+        return payload
+
+    @staticmethod
+    def _decode_json_payload(payload: bytearray) -> object:
+        if not payload:
+            return None
+        try:
+            return json.loads(payload, parse_constant=_reject_nonfinite_json)
+        except ValueError as error:
+            raise JiraResponseError("Jira returned invalid JSON") from error
+
+    async def _request_once(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: Mapping[str, str | int] | None,
+        body: Mapping[str, JsonValue] | None,
+        attempt: int,
+    ) -> bytearray | None:
+        """Perform one attempt; return None to signal the caller should retry."""
+        try:
+            async with self._client.stream(
+                method,
+                url,
+                params=params,
+                json=body,
+                auth=httpx.BasicAuth(self._configuration.email, self._configuration.api_token),
+                headers={"Accept": "application/json"},
+                timeout=self._configuration.timeout_seconds,
+                follow_redirects=False,
+            ) as response:
+                if response.status_code == 429:
+                    if attempt == self._configuration.max_rate_limit_retries:
+                        raise JiraRateLimitError("Jira rate limit persisted after bounded retries")
+                    await self._sleep(self._retry_delay(response, attempt))
+                    return None
+                self._raise_for_status(response, method)
+                return await self._read_bounded_body(response)
+        except (
+            JiraAuthenticationError,
+            JiraAuthorizationError,
+            JiraNotFoundError,
+            JiraRateLimitError,
+            JiraResponseError,
+        ):
+            raise
+        except httpx.InvalidURL as error:
+            raise JiraConfigurationError("Jira request URL is invalid") from error
+        except httpx.RequestError as error:
+            raise JiraTransportError("Jira request failed before a valid response was received") from error
 
     async def _request_json(
         self,
@@ -222,57 +303,9 @@ class JiraWorkManagementProvider(WorkManagementProvider):
     ) -> object:
         url = f"{self._configuration.site_url}{path}"
         for attempt in range(self._configuration.max_rate_limit_retries + 1):
-            try:
-                async with self._client.stream(
-                    method,
-                    url,
-                    params=params,
-                    json=body,
-                    auth=httpx.BasicAuth(self._configuration.email, self._configuration.api_token),
-                    headers={"Accept": "application/json"},
-                    timeout=self._configuration.timeout_seconds,
-                    follow_redirects=False,
-                ) as response:
-                    if response.status_code == 429:
-                        if attempt == self._configuration.max_rate_limit_retries:
-                            raise JiraRateLimitError("Jira rate limit persisted after bounded retries")
-                        await self._sleep(self._retry_delay(response, attempt))
-                        continue
-                    if response.status_code == 401:
-                        raise JiraAuthenticationError(
-                            "Jira authentication failed; verify the account email and replace the API token"
-                        )
-                    if response.status_code == 403:
-                        raise JiraAuthorizationError(
-                            "Jira denied this operation; grant the account project and issue permissions"
-                        )
-                    if response.status_code == 404:
-                        raise JiraNotFoundError("Jira resource was not found or is not visible to this account")
-                    if not 200 <= response.status_code < 300:
-                        raise JiraResponseError(f"Jira returned HTTP {response.status_code} for {method.upper()}")
-                    payload = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        payload.extend(chunk)
-                        if len(payload) > self._configuration.max_response_bytes:
-                            raise JiraResponseError("Jira response exceeded the configured byte limit")
-            except (
-                JiraAuthenticationError,
-                JiraAuthorizationError,
-                JiraNotFoundError,
-                JiraRateLimitError,
-                JiraResponseError,
-            ):
-                raise
-            except httpx.InvalidURL as error:
-                raise JiraConfigurationError("Jira request URL is invalid") from error
-            except httpx.RequestError as error:
-                raise JiraTransportError("Jira request failed before a valid response was received") from error
-            if not payload:
-                return None
-            try:
-                return json.loads(payload, parse_constant=_reject_nonfinite_json)
-            except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
-                raise JiraResponseError("Jira returned invalid JSON") from error
+            payload = await self._request_once(method, url, params=params, body=body, attempt=attempt)
+            if payload is not None:
+                return self._decode_json_payload(payload)
         raise AssertionError("rate-limit loop exhausted unexpectedly")
 
     def _validated_issue_key(self, value: str) -> str:
@@ -440,6 +473,57 @@ class JiraWorkManagementProvider(WorkManagementProvider):
             )
         return ReadinessResult(work_item_key=work_item.key, problems=tuple(problems))
 
+    async def _fetch_comment_page(self, key: str, start_at: int) -> Mapping[str, object]:
+        return self._object(
+            await self._request_json(
+                "GET",
+                f"/rest/api/3/issue/{quote(key, safe='')}/comment",
+                params={"startAt": start_at, "maxResults": 100, "expand": "properties"},
+            ),
+            "comment page",
+        )
+
+    def _matches_idempotency_binding(
+        self,
+        properties: list[object],
+        idempotency_key: str,
+        operation_binding: Mapping[str, JsonValue],
+    ) -> bool:
+        """Return True if a property binds this exact operation; raise on a conflicting reuse."""
+        for prop in properties:
+            if not isinstance(prop, Mapping) or prop.get("key") != _IDEMPOTENCY_PROPERTY:
+                continue
+            property_value = prop.get("value")
+            if property_value == operation_binding:
+                return True
+            if property_value == idempotency_key or (
+                isinstance(property_value, Mapping) and property_value.get("idempotencyKey") == idempotency_key
+            ):
+                raise JiraIdempotencyConflictError(
+                    "Jira idempotency key is already bound to a different operation or payload"
+                )
+        return False
+
+    def _receipt_for_matching_comment(
+        self,
+        comment: Mapping[str, object],
+        key: str,
+        idempotency_key: str,
+        operation_binding: Mapping[str, JsonValue],
+    ) -> OperationReceipt | None:
+        properties = comment.get("properties", [])
+        if not isinstance(properties, list):
+            raise JiraResponseError("Jira returned invalid comment properties")
+        if not self._matches_idempotency_binding(properties, idempotency_key, operation_binding):
+            return None
+        return OperationReceipt(
+            provider=self.name,
+            work_item_key=key,
+            idempotency_key=idempotency_key,
+            provider_reference=self._string(comment.get("id"), "comment ID"),
+            accepted_at=self._timestamp(comment.get("created"), "comment creation timestamp"),
+        )
+
     async def _find_comment(
         self,
         key: str,
@@ -448,44 +532,15 @@ class JiraWorkManagementProvider(WorkManagementProvider):
     ) -> OperationReceipt | None:
         start_at = 0
         for _ in range(10):
-            payload = self._object(
-                await self._request_json(
-                    "GET",
-                    f"/rest/api/3/issue/{quote(key, safe='')}/comment",
-                    params={"startAt": start_at, "maxResults": 100, "expand": "properties"},
-                ),
-                "comment page",
-            )
+            payload = await self._fetch_comment_page(key, start_at)
             comments = payload.get("comments", [])
             if not isinstance(comments, list):
                 raise JiraResponseError("Jira returned invalid comments")
             for raw_comment in comments:
                 comment = self._object(raw_comment, "comment")
-                properties = comment.get("properties", [])
-                if not isinstance(properties, list):
-                    raise JiraResponseError("Jira returned invalid comment properties")
-                matching_property: Mapping[object, object] | None = None
-                for prop in properties:
-                    if not isinstance(prop, Mapping) or prop.get("key") != _IDEMPOTENCY_PROPERTY:
-                        continue
-                    property_value = prop.get("value")
-                    if property_value == operation_binding:
-                        matching_property = prop
-                        break
-                    if property_value == idempotency_key or (
-                        isinstance(property_value, Mapping) and property_value.get("idempotencyKey") == idempotency_key
-                    ):
-                        raise JiraIdempotencyConflictError(
-                            "Jira idempotency key is already bound to a different operation or payload"
-                        )
-                if matching_property is not None:
-                    return OperationReceipt(
-                        provider=self.name,
-                        work_item_key=key,
-                        idempotency_key=idempotency_key,
-                        provider_reference=self._string(comment.get("id"), "comment ID"),
-                        accepted_at=self._timestamp(comment.get("created"), "comment creation timestamp"),
-                    )
+                receipt = self._receipt_for_matching_comment(comment, key, idempotency_key, operation_binding)
+                if receipt is not None:
+                    return receipt
             total = payload.get("total")
             if not isinstance(total, int) or isinstance(total, bool) or start_at + len(comments) >= total:
                 return None
