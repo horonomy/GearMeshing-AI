@@ -222,8 +222,10 @@ def test_repository_context_rejects_non_local_branch_refs(pseudo_branch: str) ->
 
 @pytest.mark.parametrize("unsafe_command", ("/bin/sh", "pytest;curl", "../ruff", "git status"))
 def test_tool_grant_rejects_unsafe_commands(unsafe_command: str) -> None:
+    operations = frozenset({"execute"})
+
     with pytest.raises(ValueError, match="without paths or shell syntax"):
-        ToolGrant("shell", frozenset({"execute"}), (unsafe_command,))
+        ToolGrant("shell", operations, (unsafe_command,))
 
 
 @pytest.mark.parametrize("unsafe_duration", (True, float("nan"), float("inf"), float("-inf")))
