@@ -1,0 +1,29 @@
+# Minimal OpenTelemetry Collector config for the optional local "observability" Compose profile.
+#
+# This is intentionally minimal: it accepts OTLP and logs it to stdout so the collector is usable as a
+# local sink during development. It is not wired to any exporter/backend by default and is not required
+# for the base `docker compose up -d` path. See docs/local-environment.md.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      exporters: [debug]
