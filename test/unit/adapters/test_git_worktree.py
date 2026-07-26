@@ -83,9 +83,12 @@ def make_manager(runner: FakeCommandRunner | None = None) -> tuple[GitWorktreeMa
 def test_branch_name_is_deterministic_and_run_scoped() -> None:
     manager, _ = make_manager()
 
-    assert manager.branch_name("run-1") == "work-run/run-1"
-    assert manager.branch_name("run-1") == manager.branch_name("run-1")
-    assert manager.branch_name("run-1") != manager.branch_name("run-2")
+    first_call = manager.branch_name("run-1")
+    second_call = manager.branch_name("run-1")
+
+    assert first_call == "work-run/run-1"
+    assert first_call == second_call
+    assert first_call != manager.branch_name("run-2")
 
 
 def test_worktree_path_is_deterministic_and_run_scoped() -> None:
