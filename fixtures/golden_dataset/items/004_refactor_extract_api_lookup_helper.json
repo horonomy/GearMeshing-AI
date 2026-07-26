@@ -1,0 +1,60 @@
+{
+  "dataset_version": "1.0.0",
+  "item_id": "refactor_extract_api_lookup_helper",
+  "scenario_category": "success",
+  "fixture_repository": "sample_service",
+  "work_item": {
+    "key": "FIX-104",
+    "title": "Extract shared item lookup in inventory_service.api",
+    "description": "get_item_price_cents and get_order_total_cents both call catalog.get_item and branch on None. Extract a small private helper to remove the duplication without changing observable behavior.",
+    "acceptance_criteria": [
+      "Public function signatures and return values in inventory_service/api.py are unchanged.",
+      "Duplication between get_item_price_cents and get_order_total_cents is removed.",
+      "All existing tests continue to pass without modification."
+    ],
+    "status": "Ready",
+    "web_url": "https://example.invalid/browse/FIX-104",
+    "repository": {
+      "provider": "github",
+      "owner": "gmai-fixtures",
+      "name": "sample-service",
+      "web_url": "https://example.invalid/gmai-fixtures/sample-service"
+    },
+    "revision": "rev-1",
+    "content_sha256": "67b4c97e55b18b9a6c365edc27926fad01d09cf407c106ee7d7ff81a8b4d4d32",
+    "labels": ["spec-ready", "refactor"],
+    "metadata": {
+      "issue_type": "Task",
+      "description_present": true
+    }
+  },
+  "expected_changed_files": [
+    "fixtures/sample_service/inventory_service/api.py"
+  ],
+  "forbidden_changes": [
+    "fixtures/sample_service/pyproject.toml",
+    "fixtures/sample_service/NOTICE",
+    "fixtures/sample_service/inventory_service/catalog.py",
+    "fixtures/sample_service/inventory_service/pricing.py",
+    "fixtures/sample_service/tests/test_api.py",
+    "fixtures/sample_service/tests/test_catalog.py",
+    "fixtures/sample_service/tests/test_pricing.py"
+  ],
+  "expected_checks": [
+    {
+      "command": "pytest -q",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    },
+    {
+      "command": "ruff check .",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    }
+  ],
+  "expected_outcome": {
+    "terminal_outcome": "completed",
+    "failure_category": null,
+    "notes": "Behavior-preserving refactor; existing tests must pass unmodified as evidence of unchanged behavior."
+  }
+}

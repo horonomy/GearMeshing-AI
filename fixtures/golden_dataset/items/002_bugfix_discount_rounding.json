@@ -1,0 +1,58 @@
+{
+  "dataset_version": "1.0.0",
+  "item_id": "bugfix_discount_rounding",
+  "scenario_category": "success",
+  "fixture_repository": "sample_service",
+  "work_item": {
+    "key": "FIX-102",
+    "title": "Fix apply_discount to subtract a percentage instead of flat cents",
+    "description": "inventory_service.pricing.apply_discount currently subtracts percent as a flat number of cents rather than percent% of price_cents. Fix it to correctly apply a percentage discount, rounding down to the nearest cent, and add a regression test.",
+    "acceptance_criteria": [
+      "apply_discount(1000, 10) returns 900.",
+      "A regression test covers the corrected percentage behavior.",
+      "All existing tests continue to pass."
+    ],
+    "status": "Ready",
+    "web_url": "https://example.invalid/browse/FIX-102",
+    "repository": {
+      "provider": "github",
+      "owner": "gmai-fixtures",
+      "name": "sample-service",
+      "web_url": "https://example.invalid/gmai-fixtures/sample-service"
+    },
+    "revision": "rev-1",
+    "content_sha256": "8cad1a5a15795dd3221baa07874567da2c92f99c0bfe426fd84514cb222fb175",
+    "labels": ["spec-ready", "bug"],
+    "metadata": {
+      "issue_type": "Task",
+      "description_present": true
+    }
+  },
+  "expected_changed_files": [
+    "fixtures/sample_service/inventory_service/pricing.py",
+    "fixtures/sample_service/tests/test_pricing.py"
+  ],
+  "forbidden_changes": [
+    "fixtures/sample_service/pyproject.toml",
+    "fixtures/sample_service/NOTICE",
+    "fixtures/sample_service/inventory_service/catalog.py",
+    "fixtures/sample_service/inventory_service/api.py"
+  ],
+  "expected_checks": [
+    {
+      "command": "pytest -q",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    },
+    {
+      "command": "ruff check .",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    }
+  ],
+  "expected_outcome": {
+    "terminal_outcome": "completed",
+    "failure_category": null,
+    "notes": "Straightforward bug fix plus regression test; checks pass after the fix."
+  }
+}

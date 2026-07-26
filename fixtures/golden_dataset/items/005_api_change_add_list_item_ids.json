@@ -1,0 +1,58 @@
+{
+  "dataset_version": "1.0.0",
+  "item_id": "api_change_add_list_item_ids",
+  "scenario_category": "success",
+  "fixture_repository": "sample_service",
+  "work_item": {
+    "key": "FIX-105",
+    "title": "Add list_item_ids to the inventory API",
+    "description": "Add a new function list_item_ids() to inventory_service.api that returns a tuple of every catalog item's item_id, sorted alphabetically. Add test coverage.",
+    "acceptance_criteria": [
+      "inventory_service.api.list_item_ids() returns a sorted tuple of all catalog item IDs.",
+      "New behavior is covered by a unit test in tests/test_api.py.",
+      "Existing functions in inventory_service/api.py are unchanged."
+    ],
+    "status": "Ready",
+    "web_url": "https://example.invalid/browse/FIX-105",
+    "repository": {
+      "provider": "github",
+      "owner": "gmai-fixtures",
+      "name": "sample-service",
+      "web_url": "https://example.invalid/gmai-fixtures/sample-service"
+    },
+    "revision": "rev-1",
+    "content_sha256": "69f1846cb8cd7f57e0d9138e93adcff76c041acedddb923951b1011e183565c5",
+    "labels": ["spec-ready", "api"],
+    "metadata": {
+      "issue_type": "Story",
+      "description_present": true
+    }
+  },
+  "expected_changed_files": [
+    "fixtures/sample_service/inventory_service/api.py",
+    "fixtures/sample_service/tests/test_api.py"
+  ],
+  "forbidden_changes": [
+    "fixtures/sample_service/pyproject.toml",
+    "fixtures/sample_service/NOTICE",
+    "fixtures/sample_service/inventory_service/catalog.py",
+    "fixtures/sample_service/inventory_service/pricing.py"
+  ],
+  "expected_checks": [
+    {
+      "command": "pytest -q",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    },
+    {
+      "command": "ruff check .",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    }
+  ],
+  "expected_outcome": {
+    "terminal_outcome": "completed",
+    "failure_category": null,
+    "notes": "Additive, backward-compatible API change with new test coverage."
+  }
+}

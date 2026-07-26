@@ -1,0 +1,19 @@
+[project]
+name = "gmai-fixture-sample-service"
+version = "0.1.0"
+description = "Synthetic fixture service for GearMeshing-AI golden dataset scenarios. See NOTICE."
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

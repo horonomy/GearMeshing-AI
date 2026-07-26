@@ -1,0 +1,51 @@
+{
+  "dataset_version": "1.0.0",
+  "item_id": "verification_failure_pricing_regression",
+  "scenario_category": "verification_failed",
+  "fixture_repository": "sample_service",
+  "work_item": {
+    "key": "FIX-108",
+    "title": "Add a regression test asserting apply_discount's percentage behavior",
+    "description": "Add a test asserting apply_discount(1000, 10) == 900 without changing apply_discount's implementation. This intentionally fails verification because pricing.apply_discount is not yet fixed (see bugfix_discount_rounding); it demonstrates a verification-failed and remediation scenario.",
+    "acceptance_criteria": [
+      "tests/test_pricing.py asserts apply_discount(1000, 10) == 900.",
+      "inventory_service/pricing.py is not modified in this scenario."
+    ],
+    "status": "Ready",
+    "web_url": "https://example.invalid/browse/FIX-108",
+    "repository": {
+      "provider": "github",
+      "owner": "gmai-fixtures",
+      "name": "sample-service",
+      "web_url": "https://example.invalid/gmai-fixtures/sample-service"
+    },
+    "revision": "rev-1",
+    "content_sha256": "9bace60a61a47be1dc15d93918701e5ee65bba8aaa2d7c0315757ce0371bd1d9",
+    "labels": ["spec-ready"],
+    "metadata": {
+      "issue_type": "Task",
+      "description_present": true
+    }
+  },
+  "expected_changed_files": [
+    "fixtures/sample_service/tests/test_pricing.py"
+  ],
+  "forbidden_changes": [
+    "fixtures/sample_service/inventory_service/pricing.py",
+    "fixtures/sample_service/pyproject.toml",
+    "fixtures/sample_service/NOTICE"
+  ],
+  "expected_checks": [
+    {
+      "command": "pytest -q",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "fail",
+      "reason": "apply_discount(1000, 10) currently returns 990 (flat-cent subtraction bug), so the new assertion of 900 fails."
+    }
+  ],
+  "expected_outcome": {
+    "terminal_outcome": "failed",
+    "failure_category": "verification",
+    "notes": "The added test correctly exercises the still-present pricing bug; the checks fail and the run must be reported as a verification failure requiring remediation (see bugfix_discount_rounding for the corresponding fix scenario)."
+  }
+}

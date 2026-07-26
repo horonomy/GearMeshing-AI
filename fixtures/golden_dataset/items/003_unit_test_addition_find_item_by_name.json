@@ -1,0 +1,58 @@
+{
+  "dataset_version": "1.0.0",
+  "item_id": "unit_test_addition_find_item_by_name",
+  "scenario_category": "success",
+  "fixture_repository": "sample_service",
+  "work_item": {
+    "key": "FIX-103",
+    "title": "Add unit test coverage for find_item_by_name",
+    "description": "inventory_service.catalog.find_item_by_name has no direct test coverage. Add tests covering a case-insensitive match and the no-match case. Do not modify catalog.py.",
+    "acceptance_criteria": [
+      "tests/test_catalog.py covers a successful case-insensitive lookup via find_item_by_name.",
+      "tests/test_catalog.py covers the no-match case returning None.",
+      "inventory_service/catalog.py is not modified."
+    ],
+    "status": "Ready",
+    "web_url": "https://example.invalid/browse/FIX-103",
+    "repository": {
+      "provider": "github",
+      "owner": "gmai-fixtures",
+      "name": "sample-service",
+      "web_url": "https://example.invalid/gmai-fixtures/sample-service"
+    },
+    "revision": "rev-1",
+    "content_sha256": "9122556de1116eaa8af78dc239b9ffa981df40d33f7b4c347d5b8acf10a025e0",
+    "labels": ["spec-ready", "testing"],
+    "metadata": {
+      "issue_type": "Task",
+      "description_present": true
+    }
+  },
+  "expected_changed_files": [
+    "fixtures/sample_service/tests/test_catalog.py"
+  ],
+  "forbidden_changes": [
+    "fixtures/sample_service/pyproject.toml",
+    "fixtures/sample_service/NOTICE",
+    "fixtures/sample_service/inventory_service/catalog.py",
+    "fixtures/sample_service/inventory_service/pricing.py",
+    "fixtures/sample_service/inventory_service/api.py"
+  ],
+  "expected_checks": [
+    {
+      "command": "pytest -q",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    },
+    {
+      "command": "ruff check .",
+      "working_directory": "fixtures/sample_service",
+      "expected_result": "pass"
+    }
+  ],
+  "expected_outcome": {
+    "terminal_outcome": "completed",
+    "failure_category": null,
+    "notes": "Pure test-addition task; production code must remain untouched."
+  }
+}
