@@ -56,7 +56,7 @@ _KEY_VALUE_PATTERN = re.compile(
     r"(?P<sep>\s*[=:]\s*)"
     r"(?P<value>\"[^\"\n]*\"|'[^'\n]*'|Bearer\s+\S+|\S+)"
 )
-_BARE_BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9\-_.=]+")
+_BARE_BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Z0-9\-_.=]+")
 _AWS_ACCESS_KEY_ID_PATTERN = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
 _GITHUB_TOKEN_PATTERN = re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b")
 

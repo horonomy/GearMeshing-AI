@@ -60,16 +60,18 @@ def test_schema_version_rejects_any_value_other_than_the_pinned_literal() -> Non
 
 
 def test_missing_required_fields_are_rejected() -> None:
+    work_correlation = correlation()
     with pytest.raises(ValidationError):
-        ExecutionEvidence(run_id="work-run-25", correlation=correlation())  # type: ignore[call-arg]
+        ExecutionEvidence(run_id="work-run-25", correlation=work_correlation)  # type: ignore[call-arg]
 
 
 def test_extra_fields_are_rejected() -> None:
+    work_correlation = correlation()
     with pytest.raises(ValidationError):
         ExecutionEvidence(
             evidence_id="evidence-1",
             run_id="work-run-25",
-            correlation=correlation(),
+            correlation=work_correlation,
             unexpected_field="not part of the contract",  # type: ignore[call-arg]
         )
 
