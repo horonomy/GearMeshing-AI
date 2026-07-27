@@ -159,6 +159,10 @@ class CheckResult:
             raise ValueError("outcome must be a CheckOutcome")
         if self.duration_seconds < 0:
             raise ValueError("duration_seconds must not be negative")
+        self._validate_command_and_exit_code()
+        self._validate_failure_consistency()
+
+    def _validate_command_and_exit_code(self) -> None:
         if self.outcome is CheckOutcome.UNAVAILABLE:
             if self.command is not None or self.exit_code is not None:
                 raise ValueError("an unavailable check must not carry a command or exit_code")
@@ -168,21 +172,22 @@ class CheckResult:
             object.__setattr__(self, "command", _validated_command(self.command, context="command"))
         if self.outcome is CheckOutcome.PASSED and self.exit_code != 0:
             raise ValueError("a passed check must have exit_code 0")
+
+    def _validate_failure_consistency(self) -> None:
         requires_failure = self.outcome in {CheckOutcome.FAILED, CheckOutcome.SKIPPED, CheckOutcome.TIMED_OUT}
         has_failure = self.failure is not None
         if requires_failure and not has_failure:
             raise ValueError(f"{self.outcome.value} results must include a failure")
         if not requires_failure and has_failure:
             raise ValueError(f"{self.outcome.value} results must not include a failure")
-        if has_failure:
-            failure = self.failure
-            assert failure is not None
-            allowed = _CHECK_OUTCOME_FAILURE_CATEGORIES[self.outcome]
-            if failure.category not in allowed:
-                allowed_names = ", ".join(sorted(category.value for category in allowed))
-                raise ValueError(
-                    f"{self.outcome.value} results require one of these failure categories: {allowed_names}"
-                )
+        if not has_failure:
+            return
+        failure = self.failure
+        assert failure is not None
+        allowed = _CHECK_OUTCOME_FAILURE_CATEGORIES[self.outcome]
+        if failure.category not in allowed:
+            allowed_names = ", ".join(sorted(category.value for category in allowed))
+            raise ValueError(f"{self.outcome.value} results require one of these failure categories: {allowed_names}")
 
 
 def _load_explicit_checks(config_path: Path) -> tuple[CheckDefinition, ...]:
