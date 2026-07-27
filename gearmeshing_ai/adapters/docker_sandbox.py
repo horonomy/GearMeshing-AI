@@ -144,6 +144,19 @@ def _container_name(run_id: str) -> str:
     return f"{_CONTAINER_NAME_PREFIX}{run_id}"
 
 
+def _host_user_argument() -> str | None:
+    """The ``uid:gid`` to pass to ``docker run --user``, or ``None`` where unsupported.
+
+    ``os.getuid``/``os.getgid`` do not exist on Windows, so this degrades to
+    ``None`` (the container falls back to its image's default user, typically
+    root) rather than raising - matching this module's fail-safe-but-not-fail-open
+    posture for platform-specific behavior that isn't itself a security boundary.
+    """
+    if not hasattr(os, "getuid") or not hasattr(os, "getgid"):
+        return None
+    return f"{os.getuid()}:{os.getgid()}"
+
+
 def _host_launch_env() -> dict[str, str]:
     """The minimal, explicitly allowlisted host environment needed to run the ``docker`` CLI itself.
 
@@ -339,6 +352,15 @@ def build_docker_argv(request: SandboxRunRequest) -> tuple[str, ...]:
         "--pids-limit",
         str(limits.max_processes),
         "--read-only",
+    ]
+    host_user = _host_user_argument()
+    if host_user is not None:
+        # Run as the host's own uid:gid so anything the command writes into the
+        # read-write worktree mount (caches, coverage files, ...) is owned by the
+        # invoking user on the host, not root - otherwise a non-root CI runner or
+        # developer account cannot clean up its own scratch directories afterward.
+        argv += ["--user", host_user]
+    argv += [
         "-v",
         f"{request.repository.worktree_root}:{request.container_mount_path}",
     ]

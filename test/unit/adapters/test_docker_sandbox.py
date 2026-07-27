@@ -171,6 +171,19 @@ def test_argv_uses_read_only_root_filesystem() -> None:
     assert "--read-only" in argv
 
 
+def test_argv_runs_as_the_host_user_so_written_files_are_not_root_owned() -> None:
+    request = make_request()
+
+    argv = build_docker_argv(request)
+
+    assert "--user" in argv
+    host_user = argv[argv.index("--user") + 1]
+    assert ":" in host_user
+    uid, gid = host_user.split(":")
+    assert uid.isdigit()
+    assert gid.isdigit()
+
+
 def test_argv_includes_declared_cache_mounts() -> None:
     request = make_request(
         cache_mounts=(CacheMount(host_path="/var/cache/gmai/uv", container_path="/cache/uv", read_only=True),)
