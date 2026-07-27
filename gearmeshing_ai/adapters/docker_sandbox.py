@@ -83,7 +83,7 @@ from gearmeshing_ai.application.ports.coding_executor import (
 )
 
 _RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-_ENV_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_ENV_KEY_PATTERN = re.compile(r"^[A-Za-z_]\w*$", re.ASCII)
 _IMAGE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:-]{0,255}$")
 _CONTAINER_NAME_PREFIX: Final = "gmai-sandbox-"
 _RESERVED_CONTAINER_PATHS: Final = frozenset({"/", "/proc", "/sys", "/dev", "/etc", "/run", "/var/run/docker.sock"})
@@ -482,7 +482,11 @@ class SandboxSession:
         """Return the run identity represented by this session."""
         return self._request.run_id
 
-    async def cancel(self, reason: str) -> None:
+    # This body never awaits: it records intent and signals the already-running container
+    # synchronously. It stays async for interface consistency with ClaudeCodeExecutionSession.cancel
+    # (gearmeshing_ai/adapters/claude_code_executor.py), which callers rely on to await it alongside
+    # other session operations.
+    async def cancel(self, reason: str) -> None:  # NOSONAR
         """Request idempotent cancellation by killing the running container, if any."""
         if self._result is not None:
             return

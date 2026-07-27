@@ -333,7 +333,7 @@ def test_run_request_rejects_invalid_env_var_name() -> None:
 
 def test_run_request_rejects_relative_cache_host_path() -> None:
     with pytest.raises(ValueError, match="absolute"):
-        make_request(cache_mounts=(CacheMount(host_path="relative/cache", container_path="/cache"),))
+        CacheMount(host_path="relative/cache", container_path="/cache")
 
 
 def test_run_request_rejects_unsafe_run_id() -> None:
