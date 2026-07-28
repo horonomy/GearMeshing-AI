@@ -11,7 +11,10 @@ import pytest
 from typer.testing import CliRunner
 
 from gearmeshing_ai import __version__
+from gearmeshing_ai.adapters.agent_assembly_policy_gate import AgentAssemblyPolicyGate
+from gearmeshing_ai.application.ports.tool_policy import PolicyDecision
 from gearmeshing_ai.domain.work_run import WorkRun, WorkRunCorrelation, WorkRunState
+from gearmeshing_ai.interfaces import cli as cli_module
 from gearmeshing_ai.interfaces.cli import app
 from gearmeshing_ai.runtime.checkpoint_store import JsonFileCheckpointStore
 
@@ -166,6 +169,76 @@ def test_run_reports_an_already_started_work_run_without_calling_jira(
 
     assert result.exit_code == 0, result.stdout
     assert "already exists" in result.stdout
+
+
+class _FakeAssemblyContext:
+    """Duck-typed stand-in for ``agent_assembly.AssemblyContext`` used only to
+    prove the CLI calls ``shutdown()`` on exit; the policy-gate tests below
+    monkeypatch ``AgentAssemblyPolicyGate`` directly rather than exercising a
+    real ``GatewayClient``, since the CLI's own SDK-initialization call is
+    covered separately by ``test_init_agent_assembly_*``.
+    """
+
+    def __init__(self) -> None:
+        self.shutdown_calls = 0
+
+    def shutdown(self) -> None:
+        self.shutdown_calls += 1
+
+
+def test_init_agent_assembly_is_skipped_when_no_gateway_url_is_configured() -> None:
+    assert cli_module._init_agent_assembly("gmai-cli-operator") is None
+
+
+def test_init_agent_assembly_degrades_gracefully_on_a_failed_init(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agent_assembly import AssemblyError
+
+    def _raise(**_kwargs: object) -> object:
+        raise AssemblyError("boom")
+
+    monkeypatch.setenv("AA_GATEWAY_URL", "http://127.0.0.1:1")
+    monkeypatch.setattr(cli_module, "init_assembly", _raise)
+
+    assert cli_module._init_agent_assembly("gmai-cli-operator") is None
+
+
+def test_run_calls_init_assembly_and_shuts_it_down_on_exit(
+    tmp_path: Path, mock_jira_transport: Callable[[Handler], None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mock_jira_transport(lambda _request: httpx.Response(200, json=_issue_payload(ready=True)))
+    fake_context = _FakeAssemblyContext()
+    monkeypatch.setattr(cli_module, "_init_agent_assembly", lambda _actor_id: fake_context)
+
+    async def _allow(self: object, **_kwargs: object) -> PolicyDecision:
+        return PolicyDecision(allowed=True, reason="observe mode")
+
+    monkeypatch.setattr(AgentAssemblyPolicyGate, "check", _allow)
+
+    result = runner.invoke(app, ["run", "GMAI-14", "--checkpoints-dir", str(tmp_path)], env=_JIRA_ENV)
+
+    assert result.exit_code == 0, result.stdout
+    assert fake_context.shutdown_calls == 1
+
+
+def test_run_blocks_via_agent_assembly_policy_denial(
+    tmp_path: Path, mock_jira_transport: Callable[[Handler], None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _unexpected(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("Jira must not be called once the policy gate denies")
+
+    mock_jira_transport(_unexpected)
+    monkeypatch.setattr(cli_module, "_init_agent_assembly", lambda _actor_id: _FakeAssemblyContext())
+
+    async def _deny(self: object, **_kwargs: object) -> PolicyDecision:
+        return PolicyDecision(allowed=False, reason="egress not allow-listed")
+
+    monkeypatch.setattr(AgentAssemblyPolicyGate, "check", _deny)
+
+    result = runner.invoke(app, ["run", "GMAI-14", "--checkpoints-dir", str(tmp_path)], env=_JIRA_ENV)
+
+    assert result.exit_code == 1
+    assert "egress not allow-listed" in result.output
+    assert JsonFileCheckpointStore(tmp_path).load("GMAI-14") is None
 
 
 def test_run_fails_safely_when_jira_credentials_are_missing(tmp_path: Path) -> None:
