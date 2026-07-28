@@ -19,6 +19,7 @@ from gearmeshing_ai.application.ports.coding_executor import (
     TerminalOutcome,
     ToolGrant,
 )
+from gearmeshing_ai.application.ports.tool_policy import AllowAllPolicyGate, ToolPolicyGate
 from gearmeshing_ai.application.ports.work_management import (
     BlockerUpdate,
     CompletionUpdate,
@@ -126,6 +127,7 @@ class WorkflowRunner:
         clock: Clock,
         actor_id: str = "agent-assembly",
         max_remediation_cycles: int = 3,
+        policy_gate: ToolPolicyGate | None = None,
     ) -> None:
         if not actor_id.strip():
             raise ValueError("actor_id must not be blank")
@@ -140,6 +142,7 @@ class WorkflowRunner:
         self._clock = clock
         self._actor_id = actor_id
         self._max_remediation_cycles = max_remediation_cycles
+        self._policy_gate: ToolPolicyGate = policy_gate if policy_gate is not None else AllowAllPolicyGate()
 
     async def run(self, approved: WorkRun, environment: ExecutionEnvironment) -> WorkRun:
         """Run or idempotently resume one pristine, human-approved work run."""
@@ -274,6 +277,11 @@ class WorkflowRunner:
     async def _execute(self, run: WorkRun, work_item: WorkItem, environment: ExecutionEnvironment) -> WorkRun:
         # EXECUTING is never re-entered once left (see ALLOWED_TRANSITIONS), so this always runs once.
         request = self._execution_request(run, work_item, environment, WorkflowStage.EXECUTION, 1)
+        decision = await self._policy_gate.check(
+            agent_id=self._actor_id, action_type="tool_call", tool_name="coding_executor"
+        )
+        if not decision.allowed:
+            return self._block_on_policy_denial(run, decision.reason)
         try:
             artifacts, outcome = await self._run_executor(request)
             updated = self._attach_all(run, artifacts)
@@ -392,6 +400,16 @@ class WorkflowRunner:
         )
         self._checkpoints.save(expected=expected, updated=failed)
         return failed
+
+    def _block_on_policy_denial(self, run: WorkRun, reason: str) -> WorkRun:
+        blocked = run.transition_to(
+            WorkRunState.BLOCKED,
+            actor_id=self._actor_id,
+            occurred_at=self._next_time(run),
+            details=(("failure_code", "policy_denied"), ("summary", reason)),
+        )
+        self._checkpoints.save(expected=run, updated=blocked)
+        return blocked
 
     def _next_time(self, run: WorkRun) -> datetime:
         occurred_at = self._clock()
