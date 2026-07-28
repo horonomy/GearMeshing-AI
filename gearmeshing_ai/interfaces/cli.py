@@ -14,12 +14,12 @@ manages the governed lifecycle up to and including the initial
 ``retry`` transitions; it does not itself drive execution, verification, or
 publication.
 
-When ``AA_GATEWAY_URL`` (or the legacy ``AGENT_ASSEMBLY_GATEWAY_URL``) is
-configured, every command initializes the real Agent Assembly SDK runtime
-at process start via :func:`agent_assembly.init_assembly` and tears it down
-on exit (see ``_init_agent_assembly``). Left unconfigured, no SDK call is
-made at all -- this keeps the CLI usable, deterministic, and free of
-network calls in the default/local-checkpoint-only POC configuration.
+When ``AA_GATEWAY_URL`` is configured, every command initializes the real
+Agent Assembly SDK runtime at process start via
+:func:`agent_assembly.init_assembly` and tears it down on exit (see
+``_init_agent_assembly``). Left unconfigured, no SDK call is made at all --
+this keeps the CLI usable, deterministic, and free of network calls in the
+default/local-checkpoint-only POC configuration.
 """
 
 from __future__ import annotations

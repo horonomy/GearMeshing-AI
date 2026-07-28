@@ -88,7 +88,7 @@ Key variables:
 | `DATABASE_URL` | Connection string passed to the `gearmeshing` service; defaults to the `POSTGRES_*` values above |
 | `FIXTURES_DIR` | Host path mounted read-only into the `gearmeshing` container at `/app/fixtures` (see [Fixture E2E runs](#fixture-e2e-runs)) |
 | `JIRA_SITE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | Jira Cloud adapter configuration (`gearmeshing_ai/adapters/jira_work_management.py`) |
-| `AGENT_ASSEMBLY_GATEWAY_URL`, `AGENT_ASSEMBLY_GATEWAY_TOKEN` | Placeholder for the Agent Assembly gateway integration — see [Known gaps](#known-gaps) |
+| `AA_GATEWAY_URL`, `AA_API_KEY` | Real Agent Assembly SDK gateway configuration, read by `gmai`'s process-start `init_assembly()` call — see [Known gaps](#known-gaps) |
 | `OTEL_GRPC_PORT`, `OTEL_HTTP_PORT` | Ports for the optional observability profile |
 
 ## Fixture E2E runs
@@ -117,15 +117,20 @@ local development convenience, not a production observability stack.
 
 ## Known gaps
 
-**Agent Assembly runtime and gateway integration points are stubbed, not implemented.** There is no
-Agent Assembly runtime/gateway service or container image in this repository (or referenced by it)
-today — `gearmeshing_ai` only defines the boundary types and ports it will eventually call. Rather than
-inventing a fake service definition with a made-up image, `docker-compose.yml` documents the
-configuration surface the `gearmeshing` service will need once that integration exists:
-`AGENT_ASSEMBLY_GATEWAY_URL` and `AGENT_ASSEMBLY_GATEWAY_TOKEN`, both currently unread by any code path
-and safe to leave blank. Wiring an actual Agent Assembly runtime/gateway container into this Compose
-environment is out of scope for GMAI-35 and is expected to land alongside that service's own
-repository/image.
+**This repository does not run its own Agent Assembly gateway/runtime service or container image.**
+`gmai` depends on the real `agent-assembly` PyPI package (GMAI-58) and calls its `init_assembly()`
+entry point at process start when `AA_GATEWAY_URL` is set (see `_init_agent_assembly` in
+`gearmeshing_ai/interfaces/cli.py`), using `mode="sdk-only"` (in-process interception, no
+sidecar/eBPF) and `enforcement_mode="observe"` (dry-run shadow audit — every action proceeds; no
+action is blocked yet). `AA_GATEWAY_URL`/`AA_API_KEY` point at a gateway run *outside* this Compose
+environment — for local development, start one with the SDK's own `aasm start --mode local`. Leaving
+`AA_GATEWAY_URL` blank (the default) skips SDK initialization entirely.
+
+Explicitly out of scope for GMAI-58: standing up a production Gateway deployment, the `proxy`/`ebpf`
+interception modes, and multi-agent delegation/team hierarchy parameters (`parent_agent_id`,
+`team_id`, etc.) — single-agent `sdk-only` registration is sufficient for this ticket. Switching
+`enforcement_mode` from `"observe"` to `"enforce"` (so a policy deny actually blocks an action) is a
+deliberate follow-up once the team is ready for that posture.
 
 ## No Redis, Kafka, or Kubernetes
 
