@@ -13,6 +13,13 @@ manages the governed lifecycle up to and including the initial
 ``approved``/``blocked`` checkpoint plus operator-triggered ``cancel`` and
 ``retry`` transitions; it does not itself drive execution, verification, or
 publication.
+
+When ``AA_GATEWAY_URL`` is configured, every command initializes the real
+Agent Assembly SDK runtime at process start via
+:func:`agent_assembly.init_assembly` and tears it down on exit (see
+``_init_agent_assembly``). Left unconfigured, no SDK call is made at all --
+this keeps the CLI usable, deterministic, and free of network calls in the
+default/local-checkpoint-only POC configuration.
 """
 
 from __future__ import annotations
@@ -30,8 +37,10 @@ from typing import Any, NoReturn
 
 import httpx
 import typer
+from agent_assembly import AssemblyError, init_assembly
 
 from gearmeshing_ai import __version__
+from gearmeshing_ai.adapters.agent_assembly_policy_gate import AgentAssemblyPolicyGate
 from gearmeshing_ai.adapters.jira_errors import JiraAdapterError
 from gearmeshing_ai.adapters.jira_work_management import JiraConfiguration, JiraWorkManagementProvider
 from gearmeshing_ai.application.ports.work_management import RepositoryReference
@@ -59,6 +68,10 @@ class CliConfigurationError(RuntimeError):
     """Raised when required CLI configuration is missing or invalid."""
 
 
+class AgentAssemblyPolicyDeniedError(RuntimeError):
+    """Raised when the Agent Assembly policy gate denies a governed CLI action."""
+
+
 @dataclass(frozen=True, slots=True)
 class JiraCliCredentials:
     """Jira connection settings resolved from environment variables.
@@ -75,6 +88,41 @@ class JiraCliCredentials:
 
     def __repr__(self) -> str:  # pragma: no cover - defensive redaction, not exercised by assertions
         return f"JiraCliCredentials(site_url={self.site_url!r}, project_key={self.project_key!r})"
+
+
+_AGENT_ASSEMBLY_GATEWAY_URL_ENV = "AA_GATEWAY_URL"
+_AGENT_ASSEMBLY_API_KEY_ENV = "AA_API_KEY"
+
+
+def _init_agent_assembly(agent_id: str) -> Any | None:
+    """Initialize the real Agent Assembly SDK runtime, or skip if unconfigured.
+
+    Opt-in via ``AA_GATEWAY_URL``: unset (the default for this POC and for
+    every existing test), no SDK call is made at all, so this stays a
+    zero-cost no-op for callers who have not configured a gateway. When
+    set, ``init_assembly`` is called with ``mode="sdk-only"`` (in-process
+    interception, no sidecar/eBPF) and ``enforcement_mode="observe"``
+    (dry-run shadow audit, per GMAI-58's documented initial posture) so
+    this integration observes real actions without blocking any of them
+    yet. Initialization failures degrade gracefully to no SDK context
+    rather than blocking CLI usage, since the CLI's local-checkpoint
+    lifecycle does not depend on Agent Assembly being reachable.
+
+    ``AA_API_KEY`` is read and passed explicitly here rather than relying on
+    ``init_assembly``'s own environment fallback, so this function is the
+    one place documented as reading it.
+    """
+    gateway_url = os.environ.get(_AGENT_ASSEMBLY_GATEWAY_URL_ENV, "").strip()
+    if not gateway_url:
+        return None
+    api_key = os.environ.get(_AGENT_ASSEMBLY_API_KEY_ENV, "").strip() or None
+    try:
+        return init_assembly(
+            gateway_url=gateway_url, api_key=api_key, agent_id=agent_id, mode="sdk-only", enforcement_mode="observe"
+        )
+    except AssemblyError as error:
+        typer.echo(f"Warning: Agent Assembly SDK initialization failed: {error}", err=True)
+        return None
 
 
 _JIRA_ENV_VARS = (
@@ -225,8 +273,12 @@ def _human_status_lines(run: WorkRun) -> tuple[str, ...]:
 
 
 @app.callback()
-def main() -> None:
+def main(ctx: typer.Context) -> None:
     """Governed autonomous engineering teams powered by Agent Assembly."""
+    assembly_context = _init_agent_assembly(_DEFAULT_ACTOR_ID)
+    ctx.obj = {"assembly_context": assembly_context}
+    if assembly_context is not None:
+        ctx.call_on_close(assembly_context.shutdown)
 
 
 @app.command()
@@ -237,6 +289,7 @@ def version() -> None:
 
 @app.command()
 def run(
+    ctx: typer.Context,
     jira_issue_key: str = typer.Argument(..., help="Jira issue key to start a governed work run for, e.g. GMAI-14."),
     checkpoints_dir: Path = _CHECKPOINTS_DIR_OPTION,
     actor_id: str = _ACTOR_ID_OPTION,
@@ -266,8 +319,13 @@ def run(
     except CliConfigurationError as error:
         _fail(str(error), json_output=json_output, command="run")
 
+    assembly_context = (ctx.obj or {}).get("assembly_context")
     try:
-        approved_or_blocked = asyncio.run(_start_run(normalized_key, credentials, actor_id=actor_id))
+        approved_or_blocked = asyncio.run(
+            _start_run(normalized_key, credentials, actor_id=actor_id, assembly_context=assembly_context)
+        )
+    except AgentAssemblyPolicyDeniedError as error:
+        _fail(f"Agent Assembly policy denied this work run: {error}", json_output=json_output, command="run")
     except WorkRunValidationError as error:
         _fail(
             f"work item cannot be represented as a governed work run: {error}", json_output=json_output, command="run"
@@ -283,7 +341,16 @@ def run(
     )
 
 
-async def _start_run(run_id: str, credentials: JiraCliCredentials, *, actor_id: str) -> WorkRun:
+async def _start_run(
+    run_id: str, credentials: JiraCliCredentials, *, actor_id: str, assembly_context: Any | None
+) -> WorkRun:
+    if assembly_context is not None:
+        decision = await AgentAssemblyPolicyGate(assembly_context).check(
+            agent_id=actor_id, action_type="tool_call", tool_name="jira_work_management"
+        )
+        if not decision.allowed:
+            raise AgentAssemblyPolicyDeniedError(decision.reason)
+
     configuration = _jira_configuration(credentials)
     async with JiraWorkManagementProvider(configuration) as provider:
         work_item = await provider.get_work_item(run_id)

@@ -39,12 +39,13 @@ services:
       # gearmeshing_ai today; this is provisioned ahead of that work landing.
       DATABASE_URL: postgresql://${POSTGRES_USER:-gearmeshing}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env; see .env.example}@postgres:5432/${POSTGRES_DB:-gearmeshing}
 
-      # --- Agent Assembly runtime/gateway integration points (STUBBED — known gap) ---
-      # Agent Assembly has no runtime/gateway service or image in this repo yet. These variables are
-      # placeholders documenting the configuration surface a future gateway integration will need; they
-      # are read by nothing today. See docs/local-environment.md "Known gaps" section.
-      AGENT_ASSEMBLY_GATEWAY_URL: ${AGENT_ASSEMBLY_GATEWAY_URL:-}
-      AGENT_ASSEMBLY_GATEWAY_TOKEN: ${AGENT_ASSEMBLY_GATEWAY_TOKEN:-}
+      # Agent Assembly SDK gateway configuration, read by gearmeshing_ai.interfaces.cli's
+      # _init_agent_assembly at process start (GMAI-58). AA_GATEWAY_URL is the SDK's own
+      # canonical env var name; unset (the default) means no init_assembly() call is made at
+      # all. This repo does not run its own Agent Assembly gateway/runtime service or image;
+      # point AA_GATEWAY_URL at an externally-run gateway (e.g. `aasm start --mode local`).
+      AA_GATEWAY_URL: ${AA_GATEWAY_URL:-}
+      AA_API_KEY: ${AA_API_KEY:-}
 
       # Jira Cloud adapter configuration (gearmeshing_ai/adapters/jira_work_management.py).
       JIRA_SITE_URL: ${JIRA_SITE_URL:-}

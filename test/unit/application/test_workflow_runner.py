@@ -20,6 +20,7 @@ from gearmeshing_ai.application.ports.coding_executor import (
     ResourceLimits,
     TerminalOutcome,
 )
+from gearmeshing_ai.application.ports.tool_policy import PolicyDecision, ToolPolicyGate
 from gearmeshing_ai.application.ports.work_management import (
     ArtifactUpdate,
     BlockerUpdate,
@@ -155,6 +156,18 @@ class FakePublisher:
     async def publish(self, run: WorkRun) -> str:
         self.calls.append(run)
         return "https://github.com/horonomy/GearMeshing-AI/pull/3"
+
+
+class FakeDenyingPolicyGate:
+    """Deterministic ``ToolPolicyGate`` that always denies with a fixed reason."""
+
+    def __init__(self, reason: str = "egress not allow-listed") -> None:
+        self.reason = reason
+        self.calls: list[dict[str, str]] = []
+
+    async def check(self, *, agent_id: str, action_type: str, tool_name: str) -> PolicyDecision:
+        self.calls.append({"agent_id": agent_id, "action_type": action_type, "tool_name": tool_name})
+        return PolicyDecision(allowed=False, reason=self.reason, details={"decision": "deny"})
 
 
 class FakeExecutionSession:
@@ -329,6 +342,7 @@ def _runner(
     verifier: FakeVerifier | None = None,
     remediator: FakeRemediator | None = None,
     publisher: FakePublisher | None = None,
+    policy_gate: ToolPolicyGate | None = None,
 ) -> tuple[WorkflowRunner, FakeWorkManagement, FakeCodingExecutor, FakeVerifier, FakeRemediator, FakePublisher]:
     work_mgmt = work_management or FakeWorkManagement(_work_item())
     execution = executor or _executor()
@@ -343,6 +357,7 @@ def _runner(
         remediator=remediation,
         publisher=publication,
         clock=TickingClock(),
+        policy_gate=policy_gate,
     )
     return runner, work_mgmt, execution, verification, remediation, publication
 
@@ -762,3 +777,26 @@ async def test_runner_does_not_reblock_an_already_blocked_run() -> None:
 
     assert result == blocked
     assert checkpoints.saved == []
+
+
+async def test_runner_blocks_when_the_policy_gate_denies_execution() -> None:
+    approved = _approved()
+    checkpoints = MemoryCheckpoints()
+    policy_gate = FakeDenyingPolicyGate(reason="egress not allow-listed")
+    runner, work_management, executor, *_ = _runner(checkpoints, policy_gate=policy_gate)
+
+    blocked = await runner.run(approved, _environment())
+
+    assert blocked.state is WorkRunState.BLOCKED
+    assert dict(blocked.events[-1].details) == {
+        "failure_code": "policy_denied",
+        "summary": "egress not allow-listed",
+    }
+    assert checkpoints.current == blocked
+    assert executor.requests == []
+    assert len(work_management.blockers) == 1
+    assert work_management.blockers[0].summary == "policy_denied"
+    assert work_management.blockers[0].details == "egress not allow-listed"
+    assert policy_gate.calls == [
+        {"agent_id": "agent-assembly", "action_type": "tool_call", "tool_name": "coding_executor"}
+    ]
