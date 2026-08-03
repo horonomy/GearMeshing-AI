@@ -91,6 +91,7 @@ class JiraCliCredentials:
 
 
 _AGENT_ASSEMBLY_GATEWAY_URL_ENV = "AA_GATEWAY_URL"
+_AGENT_ASSEMBLY_API_KEY_ENV = "AA_API_KEY"
 
 
 def _init_agent_assembly(agent_id: str) -> Any | None:
@@ -106,12 +107,19 @@ def _init_agent_assembly(agent_id: str) -> Any | None:
     yet. Initialization failures degrade gracefully to no SDK context
     rather than blocking CLI usage, since the CLI's local-checkpoint
     lifecycle does not depend on Agent Assembly being reachable.
+
+    ``AA_API_KEY`` is read and passed explicitly here rather than relying on
+    ``init_assembly``'s own environment fallback, so this function is the
+    one place documented as reading it.
     """
     gateway_url = os.environ.get(_AGENT_ASSEMBLY_GATEWAY_URL_ENV, "").strip()
     if not gateway_url:
         return None
+    api_key = os.environ.get(_AGENT_ASSEMBLY_API_KEY_ENV, "").strip() or None
     try:
-        return init_assembly(gateway_url=gateway_url, agent_id=agent_id, mode="sdk-only", enforcement_mode="observe")
+        return init_assembly(
+            gateway_url=gateway_url, api_key=api_key, agent_id=agent_id, mode="sdk-only", enforcement_mode="observe"
+        )
     except AssemblyError as error:
         typer.echo(f"Warning: Agent Assembly SDK initialization failed: {error}", err=True)
         return None
