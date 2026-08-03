@@ -36,8 +36,10 @@ class _FakeRuntimeClient:
         return {"decision": self.decision, "reason": self.reason}
 
 
-def _unregistered_context(agent_id: str = "gmai-cli-operator") -> AssemblyContext:
-    client = GatewayClient(gateway_url="http://127.0.0.1:59999", agent_id=agent_id)
+def _unregistered_context(
+    agent_id: str = "gmai-cli-operator", *, enforcement_mode: str | None = "observe"
+) -> AssemblyContext:
+    client = GatewayClient(gateway_url="http://127.0.0.1:59999", agent_id=agent_id, enforcement_mode=enforcement_mode)
     return AssemblyContext(
         client=client,
         adapters=[],
@@ -59,8 +61,8 @@ def _registered_context(decision: str, reason: str = "test decision") -> tuple[A
     return context, fake_client
 
 
-async def test_check_allows_and_discloses_unavailability_when_no_runtime_is_registered() -> None:
-    gate = AgentAssemblyPolicyGate(_unregistered_context())
+async def test_check_allows_and_discloses_unavailability_when_no_runtime_is_registered_under_observe() -> None:
+    gate = AgentAssemblyPolicyGate(_unregistered_context(enforcement_mode="observe"))
 
     decision = await gate.check(agent_id="gmai-cli-operator", action_type="tool_call", tool_name="write_to_disk")
 
@@ -68,6 +70,33 @@ async def test_check_allows_and_discloses_unavailability_when_no_runtime_is_regi
     assert "unavailable" in decision.reason
     assert decision.details["decision"] == "unavailable"
     assert decision.details["registered"] == "False"
+    assert decision.details["enforcement_mode"] == "observe"
+
+
+async def test_check_fails_closed_when_no_runtime_is_registered_under_the_default_enforce_posture() -> None:
+    """``enforcement_mode=None`` mirrors the gateway's live-``enforce`` default (AAASM-4130).
+
+    Matches the real SDK's own local failure posture
+    (``agent_assembly.core.runtime_interceptor._local_posture_is_enforce``): with
+    no authoritative check available, an action must not silently proceed
+    under enforce.
+    """
+    gate = AgentAssemblyPolicyGate(_unregistered_context(enforcement_mode=None))
+
+    decision = await gate.check(agent_id="gmai-cli-operator", action_type="tool_call", tool_name="write_to_disk")
+
+    assert decision.allowed is False
+    assert "failing closed" in decision.reason
+    assert decision.details["decision"] == "unavailable"
+
+
+async def test_check_fails_closed_when_no_runtime_is_registered_under_explicit_enforce() -> None:
+    gate = AgentAssemblyPolicyGate(_unregistered_context(enforcement_mode="enforce"))
+
+    decision = await gate.check(agent_id="gmai-cli-operator", action_type="tool_call", tool_name="write_to_disk")
+
+    assert decision.allowed is False
+    assert decision.details["enforcement_mode"] == "enforce"
 
 
 async def test_check_allows_when_the_registered_runtime_returns_allow() -> None:

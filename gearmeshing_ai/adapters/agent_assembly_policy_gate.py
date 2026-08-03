@@ -3,15 +3,17 @@
 ``RuntimeClient.query_policy`` (the SDK's native gRPC-backed policy check)
 only exists when the ``AssemblyContext`` successfully registered with a
 reachable gateway (``context.registered is True``); otherwise ``context.client``
-degrades to a plain ``GatewayClient`` with no policy-check method at all. This
-gate treats that degraded state as "policy check unavailable" - allowing the
-action and recording that fact in ``PolicyDecision.details`` - rather than
-raising, since the SDK itself only ever advises here: the gateway, proxy, and
-eBPF layers remain authoritative regardless of what this in-process check
-observes. Detection is structural (``hasattr(client, "query_policy")``)
-rather than ``isinstance(client, RuntimeClient)``, since ``RuntimeClient`` is
-a native extension type that cannot be subclassed or instantiated
-hermetically for tests.
+degrades to a plain ``GatewayClient`` with no policy-check method at all.
+Whether that degraded state fails open or closed mirrors the SDK's own local
+failure posture (``agent_assembly.core.runtime_interceptor._local_posture_is_enforce``):
+``enforcement_mode`` of ``None`` or ``"enforce"`` fails closed - there is no
+authoritative check available, so an action must not silently proceed - while
+the explicit dry-run postures ``"observe"``/``"disabled"`` fail open and
+record that the check was unavailable. Detection of the degraded state is
+structural (``hasattr(client, "query_policy")``) rather than
+``isinstance(client, RuntimeClient)``, since ``RuntimeClient`` is a native
+extension type that cannot be subclassed or instantiated hermetically for
+tests.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from agent_assembly import AssemblyContext
 from gearmeshing_ai.application.ports.tool_policy import PolicyDecision
 
 _DENY_LIKE_DECISIONS = frozenset({"deny", "pending", "redact", "query_failed", "channel_closed", "unspecified"})
+_ENFORCE_LOCAL_POSTURE = frozenset({None, "enforce"})
 
 
 class _PolicyQueryable(Protocol):
@@ -50,12 +53,22 @@ class AgentAssemblyPolicyGate:
         client = self._context.client
         if not hasattr(client, "query_policy"):
             # No reachable native runtime registered this agent (context.registered is
-            # False) - query_policy only exists on the native RuntimeClient. Fail open
-            # here: the SDK's in-process check is advisory only, never authoritative.
+            # False) - query_policy only exists on the native RuntimeClient.
+            enforcement_mode = getattr(client, "enforcement_mode", None)
+            fail_closed = enforcement_mode in _ENFORCE_LOCAL_POSTURE
             return PolicyDecision(
-                allowed=True,
-                reason="no registered Agent Assembly runtime client; policy check unavailable",
-                details={"decision": "unavailable", "registered": str(self._context.registered)},
+                allowed=not fail_closed,
+                reason=(
+                    f"no registered Agent Assembly runtime client and the local posture is "
+                    f"enforce ({enforcement_mode!r}); failing closed"
+                    if fail_closed
+                    else "no registered Agent Assembly runtime client; policy check unavailable"
+                ),
+                details={
+                    "decision": "unavailable",
+                    "registered": str(self._context.registered),
+                    "enforcement_mode": str(enforcement_mode),
+                },
             )
         queryable: _PolicyQueryable = client
         result = queryable.query_policy(agent_id=agent_id, action_type=action_type, tool_name=tool_name)
