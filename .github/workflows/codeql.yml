@@ -1,0 +1,74 @@
+name: CodeQL
+
+# AAASM-6185. This repository used GitHub's CodeQL *default setup*, under which a
+# pull request whose HEAD COMMIT is authored by dependabot[bot] is never analysed
+# at all: the GitHub-managed run at dynamic/github-code-scanning/codeql is not
+# created, while the CodeQL check still posts conclusion=neutral with the title
+# "N configurations not found". That is not red, does not block, and reads on the
+# pull-request page as though scanning happened. Every dependency bump merged
+# here merged with zero code scanning.
+#
+# Advanced setup — this file — analyses Dependabot head commits normally. That
+# was verified in-org on ai-agent-assembly/python-sdk, whose Dependabot-head
+# pull requests #344 and #341 (the latter a lockfile-only change) both produce a
+# real analysis run on event=pull_request.
+#
+# The language list below mirrors this repository's own former default-setup
+# configuration. Language lists differ per repository and must not be copied
+# between them.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 3 * * 1"
+
+# No paths filter, deliberately. A Dependabot pull request changes only a
+# manifest or a lockfile, and the whole point of this workflow is that such a
+# pull request gets analysed. A paths filter is the most likely way to silently
+# re-create the gap this file exists to close.
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The `actions` language analyses the workflow files in
+          # .github/workflows themselves — excessive GITHUB_TOKEN scope,
+          # untrusted-input injection, unpinned actions.
+          - language: actions
+            build-mode: none
+          # Python sources are extracted directly; build-mode: none needs no
+          # interpreter set-up and no dependency install.
+          - language: python
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@65216971a11ded447a6b76263d5a144519e5eee1 # codeql-bundle-v2.25.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@65216971a11ded447a6b76263d5a144519e5eee1 # codeql-bundle-v2.25.2
+        with:
+          category: "/language:${{ matrix.language }}"
