@@ -13,6 +13,18 @@ name: CodeQL
 # pull requests #344 and #341 (the latter a lockfile-only change) both produce a
 # real analysis run on event=pull_request.
 #
+# MIGRATION ORDER MATTERS, and it is not obvious. Default setup must be
+# DISABLED BEFORE this workflow can upload anything. With both enabled the
+# analysis runs to completion and only the upload is refused:
+#
+#   Code Scanning could not process the submitted SARIF file:
+#   CodeQL analyses from advanced configurations cannot be processed when the
+#   default setup is enabled
+#
+# which presents as a red Analyze (...) job sitting beside a green managed one.
+# Measured during this migration, not assumed. Re-enabling default setup on this
+# repository would break this workflow in exactly that way.
+
 # The language list below mirrors this repository's own former default-setup
 # configuration. Language lists differ per repository and must not be copied
 # between them.
