@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # HORO-1645: this repository had no Dependabot configuration at all, which
+  # looked like the safe default and was not. `.github/workflows/codeql.yml`
+  # pins a matched github/codeql-action/init + /analyze pair, Dependabot
+  # security updates are enabled, and a security advisory does not need this
+  # file in order to open pull requests -- but a group can only live in this
+  # file, so there was nowhere to prevent the split described below.
+  #
+  # init and /analyze are separate dependencies to Dependabot, and analyze
+  # refuses a configuration file written by a different version of init
+  # ("Loaded a configuration file for version '4.38.2', but running version
+  # '4.38.1'"). Ungrouped, one upstream release opens one pull request per
+  # step and neither can ever merge: every language leg fails and the
+  # top-level CodeQL check degrades to neutral, so the pull request shows a
+  # CodeQL entry that is not red while no analysis ran at all.
+  #
+  # open-pull-requests-limit: 0 disables version updates only, so this file
+  # does not change how many pull requests this repository sees today:
+  # "Security update pull requests are not subject to this limit and do not
+  # count toward it." The version-updates group is declared anyway, so that
+  # raising the limit later cannot silently reintroduce the split.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    groups:
+      codeql-action:
+        applies-to: version-updates
+        patterns:
+          - "github/codeql-action*"
+      codeql-action-security:
+        applies-to: security-updates
+        patterns:
+          - "github/codeql-action*"
