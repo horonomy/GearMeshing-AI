@@ -10,9 +10,11 @@ adapter's own documented scope and assumptions.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import subprocess
 import tempfile
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -27,6 +29,13 @@ from gearmeshing_ai.adapters.docker_sandbox import (
 from gearmeshing_ai.application.ports.coding_executor import RepositoryContext, TerminalOutcome
 
 _SANDBOX_IMAGE = "alpine:latest"
+
+# How long to let the Docker daemon finish reaping a `--rm` container before
+# declaring that it was never killed. Deliberately shorter than the 30s `sleep`
+# the timeout test runs inside the container, so an adapter that kills nothing
+# cannot pass by letting the container exit on its own schedule. See the comment
+# in `test_real_container_running_past_wall_clock_timeout_is_killed`.
+_CONTAINER_REMOVAL_DEADLINE_SECONDS = 15.0
 
 
 def _docker_available() -> bool:
@@ -142,12 +151,47 @@ async def test_real_container_running_past_wall_clock_timeout_is_killed(tmp_path
     assert result.outcome is TerminalOutcome.TIMED_OUT
     assert result.duration_seconds < 15.0
 
-    inspected = subprocess.run(
-        ["docker", "inspect", "gmai-sandbox-integration-3"],
-        capture_output=True,
-        check=False,
+    # `--rm` removal is performed by the Docker DAEMON, asynchronously, once the
+    # container exits. Nothing in the product waits for it, and nothing needs to:
+    # `session.result()` returns as soon as the local `docker run` CLIENT process
+    # exits, and on the timeout path the adapter SIGKILLs that client immediately
+    # after `docker kill`, so the client never participates in cleanup at all.
+    # `docker kill` itself returns once the signal has been delivered, not once
+    # the container record has been reaped.
+    #
+    # A single `docker inspect` taken the instant `result()` returns therefore
+    # races the daemon's reaper. It normally wins by a wide margin, and it lost on
+    # 2026-10-02, failing `verify` on a Dependabot security-update branch with
+    # `assert 0 != 0`. Poll for absence within a bounded deadline instead; do not
+    # reintroduce the instantaneous check (HORO-1665).
+    #
+    # This stays non-vacuous on both sides. The deadline is shorter than the
+    # container's own `sleep 30`, so an adapter that never killed the container
+    # cannot pass by letting it exit naturally, and the TIMED_OUT assertion above
+    # is reachable only from `asyncio.wait_for` expiring on a live container.
+    container_name = "gmai-sandbox-integration-3"
+    deadline = time.monotonic() + _CONTAINER_REMOVAL_DEADLINE_SECONDS
+    last_observed_status: str | None = None
+    while True:
+        inspected = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}}", container_name],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if inspected.returncode != 0:
+            last_observed_status = None
+            break
+        last_observed_status = inspected.stdout.strip() or "<empty>"
+        if time.monotonic() >= deadline:
+            break
+        await asyncio.sleep(0.1)
+
+    assert last_observed_status is None, (
+        f"container {container_name!r} was still known to the Docker daemon "
+        f"{_CONTAINER_REMOVAL_DEADLINE_SECONDS}s after the run reported TIMED_OUT; "
+        f"last observed State.Status was {last_observed_status!r}"
     )
-    assert inspected.returncode != 0
 
 
 async def test_real_docker_run_denies_network_access_by_default(tmp_path: Path) -> None:
